@@ -1,78 +1,86 @@
-import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Tuple
 
 
 class CronParser:
-    """Cron expression parser"""
+    """Parser for cron expressions (supports minute, hour, day_of_month fields)."""
     
     @staticmethod
-    def parse(cron_expr: str) -> List[str]:
-        """Parse a cron expression into its components"""
+    def parse(cron_expr: str) -> Tuple[List[int], List[int], List[int]]:
+        """Parse a cron expression into minute, hour, day_of_month lists."""
         parts = cron_expr.strip().split()
-        if len(parts) != 5:
-            raise ValueError("Cron expression must have 5 parts: minute hour day month weekday")
-        return parts
+        if len(parts) != 3:
+            raise ValueError(f"Invalid cron expression: {cron_expr}. Expected 3 fields: minute hour day_of_month")
+        
+        minute_part, hour_part, day_part = parts
+        
+        return (
+            CronParser._parse_field(minute_part, 0, 59),
+            CronParser._parse_field(hour_part, 0, 23),
+            CronParser._parse_field(day_part, 1, 31)
+        )
+    
+    @staticmethod
+    def _parse_field(field: str, min_val: int, max_val: int) -> List[int]:
+        """Parse a single cron field into a list of values."""
+        values = []
+        
+        if field == '*':
+            return list(range(min_val, max_val + 1))
+        
+        for part in field.split(','):
+            if '-' in part:
+                # Range
+                start, end = part.split('-')
+                start = int(start)
+                end = int(end)
+                if start < min_val or end > max_val:
+                    raise ValueError(f"Range {part} out of bounds [{min_val}-{max_val}]")
+                values.extend(range(start, end + 1))
+            elif '/' in part:
+                # Step
+                base, step = part.split('/')
+                step = int(step)
+                if base == '*':
+                    base_values = list(range(min_val, max_val + 1))
+                else:
+                    base_values = [int(base)]
+                values.extend(v for v in base_values if v % step == 0)
+            else:
+                # Single value
+                val = int(part)
+                if val < min_val or val > max_val:
+                    raise ValueError(f"Value {val} out of bounds [{min_val}-{max_val}]")
+                values.append(val)
+        
+        return sorted(list(set(values)))
 
     @staticmethod
     def get_next_run(cron_expr: str, now: Optional[datetime] = None) -> datetime:
-        """Calculate the next run time for a cron expression"""
+        """Calculate the next run time for a cron expression."""
         if now is None:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
         
-        parts = CronParser.parse(cron_expr)
-        minute, hour, day, month, weekday = parts
+        minute, hour, day = CronParser.parse(cron_expr)
         
-        # Start checking from next minute
+        # Make sure now is timezone-aware
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
+        
+        # Start checking from the next minute
         next_run = now + timedelta(minutes=1)
         
-        # Infinite loop until we find a matching time
         while True:
-            # Check all parts of the cron expression
-            if not CronParser._matches_part(next_run.minute, minute):
-                next_run += timedelta(minutes=1)
-                continue
+            if (next_run.minute in minute and 
+                next_run.hour in hour and 
+                next_run.day in day):
+                return next_run.replace(second=0, microsecond=0)
             
-            if not CronParser._matches_part(next_run.hour, hour):
-                next_run = next_run.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-                continue
+            # Move to next minute
+            next_run += timedelta(minutes=1)
             
-            if not CronParser._matches_part(next_run.day, day):
-                next_run = next_run.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-                continue
-            
-            if not CronParser._matches_part(next_run.month, month):
-                next_run = next_run.replace(day=1, hour=0, minute=0, second=0, microsecond=0) + timedelta(days=32)
-                next_run = next_run.replace(day=1)
-                continue
-            
-            if not CronParser._matches_part(next_run.weekday(), weekday):
-                next_run += timedelta(days=1)
-                continue
-            
-            return next_run
+            # Prevent infinite loop (check up to 1 year ahead)
+            if next_run > now + timedelta(days=365):
+                raise ValueError(f"No valid next run time found for cron expression {cron_expr}")
 
-    @staticmethod
-    def _matches_part(value: int, part: str) -> bool:
-        """Check if a value matches a cron part"""
-        if part == '*':
-            return True
-        
-        # Check for range
-        if '-' in part:
-            start, end = part.split('-')
-            return int(start) <= value <= int(end)
-        
-        # Check for step
-        if '/' in part:
-            base, step = part.split('/')
-            if base == '*':
-                base = '0' if part == '*/' else base
-            return value % int(step) == int(base)
-        
-        # Check for list
-        if ',' in part:
-            return str(value) in part.split(',')
-        
-        # Exact match
-        return str(value) == part
+

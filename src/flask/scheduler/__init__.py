@@ -1,15 +1,15 @@
 """Flask Scheduler Extension"""
 
-from .scheduler import Scheduler, Task, TaskStatus
-from .decorators import interval, delay, cron
+from .core import Scheduler
+from .task import Task
+from .decorators import interval_seconds, delay_seconds, cron
 from .cron_parser import CronParser
 
 __all__ = [
     'Scheduler',
     'Task',
-    'TaskStatus',
-    'interval',
-    'delay',
+    'interval_seconds',
+    'delay_seconds',
     'cron',
     'CronParser'
 ]

@@ -3,14 +3,14 @@ from .scheduler import Task
 from flask import current_app
 
 
-def interval(seconds: int, name: Optional[str] = None, args: List[Any] = None, kwargs: dict = None) -> Callable:
+def interval_seconds(seconds: int, name: Optional[str] = None, args: List[Any] = None, kwargs: dict = None) -> Callable:
     """Decorator to schedule a task to run at regular intervals"""
     def decorator(func: Callable) -> Callable:
         # Store task info in the function itself
         func._scheduler_task = {
             'name': name or func.__name__,
-            'func': func,
-            'interval': seconds,
+            'task_type': 'interval',
+            'interval_seconds': seconds,
             'args': args,
             'kwargs': kwargs
         }
@@ -18,14 +18,14 @@ def interval(seconds: int, name: Optional[str] = None, args: List[Any] = None, k
     return decorator
 
 
-def delay(seconds: int, name: Optional[str] = None, args: List[Any] = None, kwargs: dict = None) -> Callable:
+def delay_seconds(seconds: int, name: Optional[str] = None, args: List[Any] = None, kwargs: dict = None) -> Callable:
     """Decorator to schedule a task to run once after a delay"""
     def decorator(func: Callable) -> Callable:
         # Store task info in the function itself
         func._scheduler_task = {
             'name': name or func.__name__,
-            'func': func,
-            'delay': seconds,
+            'task_type': 'delay',
+            'delay_seconds': seconds,
             'args': args,
             'kwargs': kwargs
         }
@@ -33,14 +33,14 @@ def delay(seconds: int, name: Optional[str] = None, args: List[Any] = None, kwar
     return decorator
 
 
-def cron(expr: str, name: Optional[str] = None, args: List[Any] = None, kwargs: dict = None) -> Callable:
+def cron(cron_expr: str, name: Optional[str] = None, args: List[Any] = None, kwargs: dict = None) -> Callable:
     """Decorator to schedule a task to run on a cron schedule"""
     def decorator(func: Callable) -> Callable:
         # Store task info in the function itself
         func._scheduler_task = {
             'name': name or func.__name__,
-            'func': func,
-            'cron': expr,
+            'task_type': 'cron',
+            'cron_expr': cron_expr,
             'args': args,
             'kwargs': kwargs
         }
