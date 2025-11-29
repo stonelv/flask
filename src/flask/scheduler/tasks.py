@@ -33,6 +33,7 @@ class TaskMetrics:
     last_success_at: Optional[datetime] = None
     last_failure_at: Optional[datetime] = None
     average_duration: float = 0.0
+    last_duration: float = 0.0  # 最后一次执行时间（秒）
     last_error: Optional[str] = None
 
 
@@ -96,6 +97,8 @@ class Task:
                 'last_success_at': self.metrics.last_success_at.isoformat() if self.metrics.last_success_at else None,
                 'last_failure_at': self.metrics.last_failure_at.isoformat() if self.metrics.last_failure_at else None,
                 'average_duration': self.metrics.average_duration,
+                'last_duration': self.metrics.last_duration,
+                'last_duration_ms': int(self.metrics.last_duration * 1000),  # 毫秒
                 'last_error': self.metrics.last_error
             }
         }

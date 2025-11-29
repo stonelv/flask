@@ -34,10 +34,12 @@ class Scheduler:
         self._stop_event = threading.Event()
         self._executor: Optional[ThreadPoolExecutor] = None
         self._running_tasks: Dict[str, Future] = {}
+        self._running_tasks_lock = threading.Lock()  # 保护_running_tasks的并发访问
         self._tick_interval = 1.0  # 默认1秒检查间隔
         self._max_workers = 4
         self._enabled = True
         self._autostart = True
+        self._start_time: Optional[datetime] = None  # 调度器启动时间
         
         if app is not None:
             self.init_app(app)
@@ -95,6 +97,7 @@ class Scheduler:
         
         self._stop_event.clear()
         self._executor = ThreadPoolExecutor(max_workers=self._max_workers)
+        self._start_time = datetime.now()  # 记录启动时间
         self._thread = threading.Thread(target=self._run_scheduler, daemon=True)
         self._thread.start()
         
@@ -117,10 +120,11 @@ class Scheduler:
             self._executor.shutdown(wait=True)
         
         # 取消所有运行中的任务
-        for future in self._running_tasks.values():
-            if not future.done():
-                future.cancel()
-        self._running_tasks.clear()
+        with self._running_tasks_lock:
+            for future in self._running_tasks.values():
+                if not future.done():
+                    future.cancel()
+            self._running_tasks.clear()
         
         logger.info("Flask Scheduler stopped")
     
@@ -138,11 +142,12 @@ class Scheduler:
     def remove_task(self, name: str) -> bool:
         """移除任务"""
         # 取消运行中的任务
-        if name in self._running_tasks:
-            future = self._running_tasks[name]
-            if not future.done():
-                future.cancel()
-            del self._running_tasks[name]
+        with self._running_tasks_lock:
+            if name in self._running_tasks:
+                future = self._running_tasks[name]
+                if not future.done():
+                    future.cancel()
+                del self._running_tasks[name]
         
         return self.storage.remove_task(name)
     
@@ -250,10 +255,25 @@ class Scheduler:
         # 更新下次运行时间
         if not force_run:
             self._update_next_run_time(task)
+        elif task.task_type == TaskType.INTERVAL:
+            # 手动触发的间隔任务：重设下次运行时间避免重复调度
+            task.next_run_at = task.last_run_at + task.interval
+        elif task.task_type == TaskType.DELAY:
+            # 手动触发的延迟任务：执行后禁用
+            task.enabled = False
+            task.next_run_at = None
+        elif task.task_type == TaskType.CRON:
+            # 手动触发的cron任务：重设下次运行时间
+            try:
+                parser = CronParser(task.cron_expression)
+                task.next_run_at = parser.get_next_run_time(task.last_run_at)
+            except Exception as e:
+                logger.error(f"Error updating cron next run time for '{task.name}': {e}")
         
         # 提交到线程池
         future = self._executor.submit(self._execute_task, task, run_id)
-        self._running_tasks[task.name] = future
+        with self._running_tasks_lock:
+            self._running_tasks[task.name] = future
         
         # 添加完成回调
         future.add_done_callback(
@@ -301,8 +321,9 @@ class Scheduler:
         """任务完成回调"""
         try:
             # 移除运行记录
-            if task_name in self._running_tasks:
-                del self._running_tasks[task_name]
+            with self._running_tasks_lock:
+                if task_name in self._running_tasks:
+                    del self._running_tasks[task_name]
             
             # 获取任务
             task = self.get_task(task_name)
@@ -345,7 +366,16 @@ class Scheduler:
     
     def get_metrics(self) -> Dict[str, Any]:
         """获取调度器指标"""
-        return self.storage.get_metrics_summary()
+        metrics = self.storage.get_metrics_summary()
+        
+        # 添加调度器启动时间
+        if self._start_time:
+            uptime_seconds = (datetime.now() - self._start_time).total_seconds()
+            metrics['uptime_seconds'] = int(uptime_seconds)
+        else:
+            metrics['uptime_seconds'] = 0
+        
+        return metrics
     
     def reload(self) -> None:
         """重新加载调度器配置"""

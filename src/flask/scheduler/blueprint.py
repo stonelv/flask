@@ -1,9 +1,16 @@
 """
 Scheduler management blueprint
 """
+import sys
 from flask import Blueprint, jsonify, request, current_app
 from datetime import datetime
 from typing import Dict, Any
+
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    HAS_PSUTIL = False
 
 
 def create_scheduler_blueprint(scheduler, name='scheduler'):
@@ -15,6 +22,23 @@ def create_scheduler_blueprint(scheduler, name='scheduler'):
         """获取调度器指标"""
         try:
             metrics = scheduler.get_metrics()
+            
+            # 添加内存使用信息
+            if HAS_PSUTIL:
+                try:
+                    process = psutil.Process()
+                    metrics['rss_bytes'] = process.memory_info().rss
+                except Exception:
+                    metrics['rss_bytes'] = None
+            else:
+                metrics['rss_bytes'] = None
+            
+            # 添加最近异常记录
+            metrics['recent_exceptions'] = list(scheduler.storage.recent_exceptions)
+            
+            # 添加限流计数（如未实现返回0）
+            metrics['rate_limited_count'] = 0
+            
             return jsonify({
                 'status': 'success',
                 'timestamp': datetime.now().isoformat(),
@@ -247,6 +271,24 @@ def create_scheduler_blueprint(scheduler, name='scheduler'):
     @bp.route('/reload', methods=['POST'])
     def reload_scheduler():
         """重新加载调度器配置"""
+        try:
+            scheduler.reload()
+            
+            return jsonify({
+                'status': 'success',
+                'timestamp': datetime.now().isoformat(),
+                'message': 'Scheduler configuration reloaded successfully'
+            })
+        except Exception as e:
+            return jsonify({
+                'status': 'error',
+                'timestamp': datetime.now().isoformat(),
+                'error': str(e)
+            }), 500
+    
+    @bp.route('/tasks/reload', methods=['POST'])
+    def reload_scheduler_tasks():
+        """重新加载调度器配置（兼容路径）"""
         try:
             scheduler.reload()
             

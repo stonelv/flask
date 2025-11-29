@@ -3,9 +3,11 @@ Task storage for persisting task state and metrics
 """
 import json
 import threading
+import traceback
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional, List
+from collections import deque
 from .tasks import Task, TaskStatus
 from .exceptions import StorageError
 
@@ -19,6 +21,7 @@ class TaskStorage:
         self._lock = threading.RLock()
         self._tasks: Dict[str, Task] = {}
         self._metrics: Dict[str, Dict[str, Any]] = {}
+        self.recent_exceptions = deque(maxlen=5)  # 最近异常记录队列
         
         if self.storage_path:
             self.storage_path.parent.mkdir(parents=True, exist_ok=True)
@@ -74,15 +77,26 @@ class TaskStorage:
                 metrics = task.metrics
                 metrics.total_runs += 1
                 metrics.last_run_at = datetime.now()
+                metrics.last_duration = duration  # 保存最后一次执行时间
                 
                 if success:
                     metrics.successful_runs += 1
                     metrics.last_success_at = datetime.now()
+                    metrics.last_error = None  # 清除错误信息
                 else:
                     metrics.failed_runs += 1
                     metrics.last_failure_at = datetime.now()
                     if error:
                         metrics.last_error = error
+                        # 记录异常到recent_exceptions队列
+                        error_trace = traceback.format_exc()
+                        truncated_error = error_trace[:500] if len(error_trace) > 500 else error_trace
+                        exception_record = {
+                            'task': name,
+                            'timestamp': datetime.now().isoformat(),
+                            'error': truncated_error
+                        }
+                        self.recent_exceptions.append(exception_record)
                 
                 # 更新平均执行时间
                 if metrics.average_duration == 0:
