@@ -105,10 +105,10 @@ class Scheduler:
         # Auto-start if enabled
         if app.config['SCHEDULER_ENABLED'] and self.auto_start:
             # Use app.before_request as before_first_request is deprecated
-            @app.before_request
             def start_scheduler():
                 if not self.running:
                     self.start()
+            app.before_request(start_scheduler)
 
     def add_task(self, task: Task) -> None:
         """Add a task to the scheduler"""
@@ -190,7 +190,8 @@ class Scheduler:
         self.stop()
         # Clear existing tasks and rediscover
         self.tasks.clear()
-        self._discover_tasks(self.app)
+        if self.app:
+            self._discover_tasks(self.app)
         self.start()
         logger.info("Scheduler reloaded")
 
