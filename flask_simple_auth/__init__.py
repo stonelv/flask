@@ -26,9 +26,13 @@ class FlaskSimpleAuth:
         @wraps(f)
         def decorated(*args, **kwargs):
             # 获取配置
-            header_name = current_app.config.get('SIMPLE_AUTH_API_KEY_HEADER')
+            header_name = current_app.config.get('SIMPLE_AUTH_API_KEY_HEADER', 'X-API-Key')
             static_keys = current_app.config.get('SIMPLE_AUTH_API_KEYS', [])
             key_loader = current_app.config.get('SIMPLE_AUTH_API_KEY_LOADER')
+
+            # 确保 header_name 是字符串类型
+            if not isinstance(header_name, str):
+                header_name = 'X-API-Key'
 
             # 从请求头中获取 API Key
             api_key = request.headers.get(header_name)
