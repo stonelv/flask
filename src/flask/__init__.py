@@ -35,5 +35,7 @@ from .templating import render_template as render_template
 from .templating import render_template_string as render_template_string
 from .templating import stream_template as stream_template
 from .templating import stream_template_string as stream_template_string
+from .simple_auth import SimpleAuth as SimpleAuth
+from .simple_auth import simple_auth as simple_auth
 from .wrappers import Request as Request
 from .wrappers import Response as Response
