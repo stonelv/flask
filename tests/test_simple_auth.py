@@ -2,7 +2,7 @@
 
 import pytest
 from flask import Flask, jsonify
-from src.flask.simple_auth import SimpleAuth, simple_auth
+from flask.simple_auth import SimpleAuth, simple_auth
 
 
 @pytest.fixture

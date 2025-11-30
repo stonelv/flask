@@ -1,6 +1,7 @@
 """Flask Simple Auth Extension for API Key Verification"""
 
 from typing import Callable, List, Optional, Union
+from functools import wraps
 from flask import Flask, request, abort
 
 
@@ -65,6 +66,7 @@ class SimpleAuth:
         Returns:
             The decorated function.
         """
+        @wraps(func)
         def wrapper(*args, **kwargs):
             # Get the API key from the request header
             api_key = request.headers.get(self.api_key_header)
@@ -78,10 +80,6 @@ class SimpleAuth:
 
             # Call the original function
             return func(*args, **kwargs)
-
-        # Preserve the original function's name and docstring
-        wrapper.__name__ = func.__name__
-        wrapper.__doc__ = func.__doc__
 
         return wrapper
 
@@ -105,6 +103,8 @@ class SimpleAuth:
 # Create a default instance for the extension
 simple_auth = SimpleAuth()
 
+# Note: The global simple_auth instance needs to be initialized with
+# init_app(app) before it can read configuration from the Flask app.
 
 # Export the main classes and functions
 __all__ = ["SimpleAuth", "simple_auth"]

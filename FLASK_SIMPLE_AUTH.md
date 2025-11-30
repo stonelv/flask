@@ -60,6 +60,47 @@ auth = SimpleAuth()
 auth.init_app(app)
 ```
 
+#### 方法三：使用全局 `simple_auth` 实例
+
+扩展提供了一个全局的 `simple_auth` 实例，您可以直接使用它：
+
+```python
+from flask import Flask
+from flask.simple_auth import simple_auth
+
+app = Flask(__name__)
+app.config["SIMPLE_AUTH_API_KEYS"] = ["valid_key"]
+
+# 初始化全局实例
+simple_auth.init_app(app)
+```
+
+### 工厂模式下的使用
+
+在 Flask 应用工厂模式中，您可以这样使用扩展：
+
+```python
+from flask import Flask
+from flask.simple_auth import SimpleAuth
+
+# 创建扩展实例
+auth = SimpleAuth()
+
+def create_app(config_name):
+    app = Flask(__name__)
+    
+    # 加载配置
+    app.config.from_object(config_name)
+    
+    # 初始化扩展
+    auth.init_app(app)
+    
+    # 注册蓝图等
+    # ...
+    
+    return app
+```
+
 ### 保护路由
 
 使用 `@require_api_key` 装饰器保护需要 API Key 验证的路由：
@@ -87,7 +128,24 @@ from flask import jsonify
 
 ## 测试
 
-运行单元测试：
+### 配置 pytest
+
+为了确保测试能正确导入模块，您需要在项目根目录下创建 `pytest.ini` 文件，并配置 `pythonpath`：
+
+```ini
+[pytest]
+pythonpath = src
+```
+
+### 运行测试
+
+运行所有单元测试：
+
+```bash
+pytest
+```
+
+运行特定的测试文件：
 
 ```bash
 pytest tests/test_simple_auth.py
