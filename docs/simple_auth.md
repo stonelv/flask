@@ -26,7 +26,7 @@ from flask import Flask
 from flask_simple_auth import SimpleAuth, require_api_key
 
 app = Flask(__name__)
-app.config['SIMPLE_AUTH_API_KEYS'] = ['your-secret-api-key-123']
+app.config['SIMPLE_AUTH_KEYS'] = ['your-secret-api-key-123']
 
 # Initialize the extension
 auth = SimpleAuth(app)
@@ -49,16 +49,18 @@ if __name__ == '__main__':
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `SIMPLE_AUTH_API_KEY_HEADER` | `X-API-KEY` | Header name to look for the API key |
-| `SIMPLE_AUTH_API_KEYS` | `None` | List of valid static API keys |
+| `SIMPLE_AUTH_HEADER_NAME` | `X-API-Key` | Header name to look for the API key |
+| `SIMPLE_AUTH_KEYS` | `None` | List of valid static API keys |
+| `SIMPLE_AUTH_KEY_LOADER` | `None` | Callable that verifies API keys dynamically |
+| `SIMPLE_AUTH_UNAUTHORIZED_HANDLER` | `None` | Callable that handles unauthorized responses |
 
 ### Custom Header
 
 You can configure a custom header for API key retrieval:
 
 ```python
-app.config['SIMPLE_AUTH_API_KEY_HEADER'] = 'Authorization'
-app.config['SIMPLE_AUTH_API_KEYS'] = ['Bearer your-secret-token']
+app.config['SIMPLE_AUTH_HEADER_NAME'] = 'Authorization'
+app.config['SIMPLE_AUTH_KEYS'] = ['Bearer your-secret-token']
 ```
 
 ### Dynamic Key Loading
@@ -71,8 +73,8 @@ def custom_key_loader(api_key):
     # Example: return User.query.filter_by(api_key=api_key).first() is not None
     return api_key == 'dynamic-secret-key'
 
-# Set the key loader on the app
-app.key_loader = custom_key_loader
+# Set the key loader in the app config
+app.config['SIMPLE_AUTH_KEY_LOADER'] = custom_key_loader
 ```
 
 ### Making Requests
@@ -80,7 +82,7 @@ app.key_loader = custom_key_loader
 To access a protected route, include the API key in the configured header:
 
 ```bash
-curl -H "X-API-KEY: your-secret-api-key-123" http://localhost:5000/api/data
+curl -H "X-API-Key: your-secret-api-key-123" http://localhost:5000/api/data
 ```
 
 ### Error Responses

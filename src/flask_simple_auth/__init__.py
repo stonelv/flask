@@ -104,7 +104,7 @@ class SimpleAuth:
 
         # Get key loader from config or use static keys
         key_loader = current_app.config.get('SIMPLE_AUTH_KEY_LOADER')
-        static_keys = current_app.config.get('SIMPLE_AUTH_KEYS', [])
+        static_keys = current_app.config.get('SIMPLE_AUTH_KEYS') or []
 
         # Validate the API key
         try:
