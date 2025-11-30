@@ -21,7 +21,7 @@ class TaskStorage:
         self._lock = threading.RLock()
         self._tasks: Dict[str, Task] = {}
         self._metrics: Dict[str, Dict[str, Any]] = {}
-        self.recent_exceptions = deque(maxlen=5)  # 最近异常记录队列
+        self._recent_exceptions = deque(maxlen=5)  # 最近异常记录队列（私有变量，受锁保护）
         
         if self.storage_path:
             self.storage_path.parent.mkdir(parents=True, exist_ok=True)
@@ -87,16 +87,15 @@ class TaskStorage:
                     metrics.failed_runs += 1
                     metrics.last_failure_at = datetime.now()
                     if error:
-                        metrics.last_error = error
+                        truncated_error = error[:500] if len(error) > 500 else error
+                        metrics.last_error = truncated_error
                         # 记录异常到recent_exceptions队列
-                        error_trace = traceback.format_exc()
-                        truncated_error = error_trace[:500] if len(error_trace) > 500 else error_trace
                         exception_record = {
                             'task': name,
                             'timestamp': datetime.now().isoformat(),
                             'error': truncated_error
                         }
-                        self.recent_exceptions.append(exception_record)
+                        self._recent_exceptions.append(exception_record)
                 
                 # 更新平均执行时间
                 if metrics.average_duration == 0:
@@ -131,7 +130,8 @@ class TaskStorage:
                 'success_rate': (successful_runs / total_runs * 100) if total_runs > 0 else 0,
                 'tasks': {
                     task.name: task.to_dict() for task in self._tasks.values()
-                }
+                },
+                'recent_exceptions': list(self._recent_exceptions)
             }
     
     def _save_to_disk(self) -> None:

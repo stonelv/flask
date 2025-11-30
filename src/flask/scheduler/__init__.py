@@ -14,6 +14,7 @@ from .tasks import Task, TaskStatus, TaskType
 from .storage import TaskStorage
 from .decorators import interval_task, delay_task, cron_task
 from .exceptions import SchedulerError, TaskError, CronParseError
+from .blueprint import create_scheduler_blueprint
 
 __all__ = [
     'Scheduler',
@@ -26,5 +27,6 @@ __all__ = [
     'cron_task',
     'SchedulerError',
     'TaskError',
-    'CronParseError'
+    'CronParseError',
+    'create_scheduler_blueprint'
 ]

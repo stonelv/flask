@@ -98,7 +98,7 @@ class Task:
                 'last_failure_at': self.metrics.last_failure_at.isoformat() if self.metrics.last_failure_at else None,
                 'average_duration': self.metrics.average_duration,
                 'last_duration': self.metrics.last_duration,
-                'last_duration_ms': int(self.metrics.last_duration * 1000),  # 毫秒
+                'last_duration_ms': int(self.metrics.last_duration * 1000) if self.metrics.last_duration is not None else None,
                 'last_error': self.metrics.last_error
             }
         }

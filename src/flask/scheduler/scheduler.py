@@ -35,6 +35,7 @@ class Scheduler:
         self._executor: Optional[ThreadPoolExecutor] = None
         self._running_tasks: Dict[str, Future] = {}
         self._running_tasks_lock = threading.Lock()  # 保护_running_tasks的并发访问
+        self._run_lock = threading.Lock()  # 保护任务状态变更的原子性
         self._tick_interval = 1.0  # 默认1秒检查间隔
         self._max_workers = 4
         self._enabled = True
@@ -95,11 +96,12 @@ class Scheduler:
             logger.warning("Scheduler is already running")
             return
         
-        self._stop_event.clear()
-        self._executor = ThreadPoolExecutor(max_workers=self._max_workers)
-        self._start_time = datetime.now()  # 记录启动时间
-        self._thread = threading.Thread(target=self._run_scheduler, daemon=True)
-        self._thread.start()
+        with self._run_lock:
+            self._stop_event.clear()
+            self._executor = ThreadPoolExecutor(max_workers=self._max_workers)
+            self._start_time = datetime.now()  # 记录启动时间
+            self._thread = threading.Thread(target=self._run_scheduler, daemon=True)
+            self._thread.start()
         
         logger.info("Flask Scheduler started")
     
@@ -246,39 +248,40 @@ class Scheduler:
             logger.error("Task executor not available")
             return
         
-        # 生成运行ID
-        run_id = str(uuid.uuid4())
-        task.current_run_id = run_id
-        task.status = TaskStatus.RUNNING
-        task.last_run_at = datetime.now()
-        
-        # 更新下次运行时间
-        if not force_run:
-            self._update_next_run_time(task)
-        elif task.task_type == TaskType.INTERVAL:
-            # 手动触发的间隔任务：重设下次运行时间避免重复调度
-            task.next_run_at = task.last_run_at + task.interval
-        elif task.task_type == TaskType.DELAY:
-            # 手动触发的延迟任务：执行后禁用
-            task.enabled = False
-            task.next_run_at = None
-        elif task.task_type == TaskType.CRON:
-            # 手动触发的cron任务：重设下次运行时间
-            try:
-                parser = CronParser(task.cron_expression)
-                task.next_run_at = parser.get_next_run_time(task.last_run_at)
-            except Exception as e:
-                logger.error(f"Error updating cron next run time for '{task.name}': {e}")
-        
-        # 提交到线程池
-        future = self._executor.submit(self._execute_task, task, run_id)
-        with self._running_tasks_lock:
-            self._running_tasks[task.name] = future
-        
-        # 添加完成回调
-        future.add_done_callback(
-            lambda f: self._task_completed(task.name, run_id, f)
-        )
+        with self._run_lock:
+            # 生成运行ID
+            run_id = str(uuid.uuid4())
+            task.current_run_id = run_id
+            task.status = TaskStatus.RUNNING
+            task.last_run_at = datetime.now()
+            
+            # 更新下次运行时间
+            if not force_run:
+                self._update_next_run_time(task)
+            elif task.task_type == TaskType.INTERVAL:
+                # 手动触发的间隔任务：重设下次运行时间避免重复调度
+                task.next_run_at = task.last_run_at + task.interval
+            elif task.task_type == TaskType.DELAY:
+                # 手动触发的延迟任务：执行后禁用
+                task.enabled = False
+                task.next_run_at = None
+            elif task.task_type == TaskType.CRON:
+                # 手动触发的cron任务：重设下次运行时间
+                try:
+                    parser = CronParser(task.cron_expression)
+                    task.next_run_at = parser.get_next_run_time(task.last_run_at)
+                except Exception as e:
+                    logger.error(f"Error updating cron next run time for '{task.name}': {e}")
+            
+            # 提交到线程池
+            future = self._executor.submit(self._execute_task, task, run_id)
+            with self._running_tasks_lock:
+                self._running_tasks[task.name] = future
+            
+            # 添加完成回调
+            future.add_done_callback(
+                lambda f: self._task_completed(task.name, run_id, f)
+            )
         
         logger.debug(f"Task '{task.name}' submitted (run_id: {run_id})")
     
@@ -330,17 +333,35 @@ class Scheduler:
             if not task:
                 return
             
-            # 更新状态
-            if future.exception():
-                task.status = TaskStatus.FAILED
-                task.last_error = str(future.exception())
-                logger.error(f"Task '{task_name}' failed: {future.exception()}")
-            else:
-                task.status = TaskStatus.SUCCESS
-                task.last_error = None
-                task.retry_count = 0
-            
-            task.current_run_id = None
+            with self._run_lock:
+                # 更新状态
+                if future.exception():
+                    task.status = TaskStatus.FAILED
+                    error_msg = str(future.exception())
+                    task.last_error = error_msg[:500] if len(error_msg) > 500 else error_msg  # 截断错误信息
+                    logger.error(f"Task '{task_name}' failed: {future.exception()}")
+                else:
+                    task.status = TaskStatus.SUCCESS
+                    task.last_error = None
+                    task.retry_count = 0
+                
+                task.current_run_id = None
+                
+                # 根据任务类型重新计算下次运行时间
+                if task.task_type == TaskType.INTERVAL and task.enabled:
+                    # 间隔任务：基于最后运行时间重新计算
+                    task.next_run_at = task.last_run_at + task.interval
+                elif task.task_type == TaskType.CRON and task.enabled:
+                    # Cron任务：重新计算下次运行时间
+                    try:
+                        parser = CronParser(task.cron_expression)
+                        task.next_run_at = parser.get_next_run_time(task.last_run_at)
+                    except Exception as e:
+                        logger.error(f"Error updating cron next run time for '{task_name}': {e}")
+                elif task.task_type == TaskType.DELAY:
+                    # 延迟任务：执行完成后禁用
+                    task.enabled = False
+                    task.next_run_at = None
             
         except Exception as e:
             logger.error(f"Error in task completion handler: {e}")

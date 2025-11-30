@@ -2,6 +2,7 @@
 Scheduler management blueprint
 """
 import sys
+import os
 from flask import Blueprint, jsonify, request, current_app
 from datetime import datetime
 from typing import Dict, Any
@@ -23,6 +24,10 @@ def create_scheduler_blueprint(scheduler, name='scheduler'):
         try:
             metrics = scheduler.get_metrics()
             
+            # 添加调度器状态信息
+            metrics['scheduler_status'] = 'running' if scheduler.is_running() else 'stopped'
+            metrics['timestamp'] = datetime.now().isoformat()
+            
             # 添加内存使用信息
             if HAS_PSUTIL:
                 try:
@@ -34,16 +39,12 @@ def create_scheduler_blueprint(scheduler, name='scheduler'):
                 metrics['rss_bytes'] = None
             
             # 添加最近异常记录
-            metrics['recent_exceptions'] = list(scheduler.storage.recent_exceptions)
+            metrics['recent_exceptions'] = list(scheduler.storage._recent_exceptions)
             
             # 添加限流计数（如未实现返回0）
             metrics['rate_limited_count'] = 0
             
-            return jsonify({
-                'status': 'success',
-                'timestamp': datetime.now().isoformat(),
-                'data': metrics
-            })
+            return jsonify(metrics)
         except Exception as e:
             return jsonify({
                 'status': 'error',
@@ -63,6 +64,9 @@ def create_scheduler_blueprint(scheduler, name='scheduler'):
                 # 添加运行状态
                 task_data['is_running'] = task.status.value == 'running'
                 task_data['scheduler_status'] = 'running' if scheduler.is_running() else 'stopped'
+                # 添加运行次数和最后一次运行耗时
+                task_data['run_count'] = task.metrics.total_runs
+                task_data['last_duration_ms'] = int(task.metrics.last_duration * 1000) if task.metrics.last_duration is not None else None
                 tasks_data.append(task_data)
             
             return jsonify({
@@ -95,6 +99,8 @@ def create_scheduler_blueprint(scheduler, name='scheduler'):
             
             task_data = task.to_dict()
             task_data['is_running'] = task.status.value == 'running'
+            task_data['run_count'] = task.metrics.total_runs
+            task_data['last_duration_ms'] = int(task.metrics.last_duration * 1000) if task.metrics.last_duration is not None else None
             
             return jsonify({
                 'status': 'success',
@@ -285,7 +291,7 @@ def create_scheduler_blueprint(scheduler, name='scheduler'):
                 'timestamp': datetime.now().isoformat(),
                 'error': str(e)
             }), 500
-    
+
     @bp.route('/tasks/reload', methods=['POST'])
     def reload_scheduler_tasks():
         """重新加载调度器配置（兼容路径）"""
