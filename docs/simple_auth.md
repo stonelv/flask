@@ -85,8 +85,43 @@ curl -H "X-API-KEY: your-secret-api-key-123" http://localhost:5000/api/data
 
 ### Error Responses
 
-- `401 Unauthorized`: When the API key is missing from the request
-- `403 Forbidden`: When the API key is invalid
+- `401 Unauthorized`: When the API key is missing or invalid
+  - Default response: `{"error": "unauthorized", "message": "<reason>"}`
+
+### Allow None Parameter
+
+You can use `allow_none=True` to allow access to a route without an API key:
+
+```python
+@app.route('/api/public-data')
+@require_api_key(allow_none=True)
+def get_public_data():
+    return {'data': 'This is public data'}
+```
+
+### Accessing API Key Metadata
+
+When using a key loader that returns metadata, you can access it via `g.current_api_key_meta`:
+
+```python
+from flask import g
+
+@app.route('/api/user')
+@require_api_key()
+def get_user():
+    return {'user_id': g.current_api_key_meta['user_id'], 'role': g.current_api_key_meta['role']}
+```
+
+### Custom Unauthorized Handler
+
+You can customize the unauthorized response by setting a custom handler:
+
+```python
+def custom_unauthorized_handler(error):
+    return {'error': 'custom_error', 'message': 'Custom unauthorized message'}, 401
+
+app.config['SIMPLE_AUTH_UNAUTHORIZED_HANDLER'] = custom_unauthorized_handler
+```
 
 ## Testing
 
