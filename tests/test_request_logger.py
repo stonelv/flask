@@ -159,3 +159,81 @@ def test_log_file_config(app, client):
             if isinstance(handler, logging.FileHandler):
                 handler.close()
                 logger.logger.removeHandler(handler)
+
+
+def test_request_id_consistency(app, client):
+    """Test that request_id in flask.g matches the one in response headers."""
+    # Add a route that returns the request_id from flask.g
+    @app.route('/test_request_id')
+    def test_request_id_route():
+        from flask import g
+        return {'request_id': g.request_id}
+    
+    # Initialize the logger
+    RequestLogger(app)
+    
+    # Make a request
+    response = client.get('/test_request_id')
+    
+    # Check that response is successful
+    assert response.status_code == 200
+    
+    # Get request_id from response header and body
+    header_request_id = response.headers['X-Request-ID']
+    body_request_id = response.json['request_id']
+    
+    # Check that they are equal
+    assert header_request_id == body_request_id
+
+
+def test_json_log_fields(app, client, caplog):
+    """Test that JSON logs contain all required fields with correct types."""
+    # Configure to use JSON logging
+    app.config['REQUEST_LOGGER_LOG_JSON'] = True
+    app.config['REQUEST_LOGGER_LOG_LEVEL'] = 'INFO'  # Ensure INFO level is enabled
+    
+    # Clear existing handlers and add JSON formatter to caplog
+    logger = logging.getLogger("flask.request_logger")
+    logger.handlers.clear()
+    logger.setLevel(logging.INFO)
+    
+    # Initialize the RequestLogger extension
+    request_logger = RequestLogger(app)
+    
+    # Make a request
+    with caplog.at_level(logging.INFO):
+        response = client.get('/')
+    
+    # Get the log output
+    assert len(caplog.records) > 0, "No log records captured"
+    log_record = caplog.records[0]
+    
+    # Format the log record using the JSON formatter
+    formatter = JSONFormatter()
+    log_output = formatter.format(log_record)
+    
+    # Parse JSON log
+    log_json = json.loads(log_output.strip())
+    
+    # Check that all required fields are present and have correct types
+    required_fields = [
+        ('timestamp', str),
+        ('level', str),
+        ('message', str),
+        ('request_id', str),
+        ('method', str),
+        ('path', str),
+        ('status', int),
+        ('duration_ms', int),
+        ('remote_addr', str)
+    ]
+    
+    for field_name, field_type in required_fields:
+        assert field_name in log_json, f"Missing required field: {field_name}"
+        assert isinstance(log_json[field_name], field_type), f"Field {field_name} should be of type {field_type}, got {type(log_json[field_name])}"
+    
+    # Check specific field values
+    assert log_json['method'] == 'GET'
+    assert log_json['path'] == '/'
+    assert log_json['status'] == 404
+    assert log_json['remote_addr'] == '127.0.0.1' or log_json['remote_addr'] == '::1'  # IPv4 or IPv6 loopback

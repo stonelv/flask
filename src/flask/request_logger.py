@@ -4,7 +4,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
-from flask import Flask, request, g, after_this_request, current_app
+from flask import Flask, request, g, current_app
 
 
 class JSONFormatter(logging.Formatter):
@@ -21,7 +21,7 @@ class JSONFormatter(logging.Formatter):
         """
         # Extract standard log fields
         log_data = {
-            "timestamp": datetime.utcfromtimestamp(record.created).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+            "timestamp": datetime.fromtimestamp(record.created, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
             "level": record.levelname,
             "message": record.getMessage(),
         }
@@ -50,6 +50,41 @@ class JSONFormatter(logging.Formatter):
                 log_data[key] = value
         
         return json.dumps(log_data)
+
+
+class RequestLogger:
+    """Flask extension for structured JSON access logging and Request ID support.
+
+    This extension adds:
+    1. Unique Request ID to each request (UUIDv4)
+    2. Injection of Request ID into response headers
+    3. Structured JSON logging of request/response data
+
+    Configuration options:
+    - REQUEST_LOGGER_ENABLED: Enable/disable the extension (default: True)
+    - REQUEST_LOGGER_HEADER_NAME: Name of the response header with Request ID (default: "X-Request-ID")
+    - REQUEST_LOGGER_LOG_JSON: Enable/disable JSON formatting of logs (default: True)
+    - REQUEST_LOGGER_LOG_FILE: Path to log file (default: None, uses stdout)
+    - REQUEST_LOGGER_LOG_LEVEL: Logging level (default: "INFO")
+    """
+
+
+def init_request_logger(app: Flask, config: Optional[Dict[str, Any]] = None) -> RequestLogger:
+    """Initialize the RequestLogger extension with a Flask application.
+
+    This is a convenience function that creates a RequestLogger instance
+    and initializes it with the given app and config.
+
+    Args:
+        app: Flask application instance.
+        config: Optional configuration dictionary to override app.config.
+
+    Returns:
+        RequestLogger instance.
+    """
+    logger = RequestLogger()
+    logger.init_app(app, config)
+    return logger
 
 
 class RequestLogger:
@@ -128,7 +163,21 @@ class RequestLogger:
             )
         
         handler.setFormatter(formatter)
-        self.logger.addHandler(handler)
+        
+        # Check if handler already exists to prevent duplicates
+        handler_exists = False
+        for existing_handler in self.logger.handlers:
+            if isinstance(existing_handler, type(handler)):
+                if app.config["REQUEST_LOGGER_LOG_FILE"]:
+                    if hasattr(existing_handler, 'baseFilename') and existing_handler.baseFilename == app.config["REQUEST_LOGGER_LOG_FILE"]:
+                        handler_exists = True
+                        break
+                else:
+                    handler_exists = True
+                    break
+        
+        if not handler_exists:
+            self.logger.addHandler(handler)
         
         # Store extension in app.extensions
         if "request_logger" not in app.extensions:
@@ -179,45 +228,3 @@ class RequestLogger:
         response.headers[header_name] = request_id
         
         return response
-    """Custom JSON formatter for logging."""
-
-    def format(self, record: logging.LogRecord) -> str:
-        """Format log record as JSON string.
-
-        Args:
-            record: Log record object.
-
-        Returns:
-            JSON formatted log string.
-        """
-        # Extract standard log fields
-        log_data = {
-            "timestamp": datetime.utcfromtimestamp(record.created).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-            "level": record.levelname,
-            "message": record.getMessage(),
-        }
-        
-        # Add extra fields
-        if hasattr(record, "request_id"):
-            log_data["request_id"] = record.request_id
-        if hasattr(record, "method"):
-            log_data["method"] = record.method
-        if hasattr(record, "path"):
-            log_data["path"] = record.path
-        if hasattr(record, "status"):
-            log_data["status"] = record.status
-        if hasattr(record, "duration_ms"):
-            log_data["duration_ms"] = record.duration_ms
-        if hasattr(record, "remote_addr"):
-            log_data["remote_addr"] = record.remote_addr
-        
-        # Add any other extra fields
-        for key, value in record.__dict__.items():
-            if key not in ("message", "asctime", "levelname", "levelno", "pathname",
-                         "filename", "module", "lineno", "funcName", "created", "msecs",
-                         "relativeCreated", "thread", "threadName", "process", "processName",
-                         "args", "exc_info", "exc_text", "stack_info", "request_id",
-                         "method", "path", "status", "duration_ms", "remote_addr"):
-                log_data[key] = value
-        
-        return json.dumps(log_data)
