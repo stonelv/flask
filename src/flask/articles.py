@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, abort
 from .models import db, Article
 from .auth import login_required
 from sqlalchemy import or_
@@ -18,14 +18,13 @@ def index():
     per_page = 10
 
     # 构建查询
-    query = Article.query
     if search:
-        query = query.filter(or_(Article.title.contains(search), Article.content.contains(search)))
+        query = db.select(Article).filter(or_(Article.title.contains(search), Article.content.contains(search))).order_by(Article.updated_at.desc())
+    else:
+        query = db.select(Article).order_by(Article.updated_at.desc())
 
     # 分页查询
-    pagination = query.order_by(Article.updated_at.desc()).paginate(
-        page=page, per_page=per_page, error_out=False
-    )
+    pagination = db.paginate(query, page=page, per_page=per_page, error_out=False)
     articles = pagination.items
 
     return render_template('articles/index.html', articles=articles, pagination=pagination, search=search)
@@ -65,7 +64,9 @@ def new():
 @articles_bp.route('/admin/articles/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit(id):
-    article = Article.query.get_or_404(id)
+    article = db.session.get(Article, id)
+    if not article:
+        abort(404)
 
     if request.method == 'POST':
         title = request.form['title'].strip()
@@ -98,7 +99,9 @@ def edit(id):
 @articles_bp.route('/admin/articles/<int:id>/delete', methods=['POST'])
 @login_required
 def delete(id):
-    article = Article.query.get_or_404(id)
+    article = db.session.get(Article, id)
+    if not article:
+        abort(404)
     db.session.delete(article)
     db.session.commit()
 
@@ -109,7 +112,9 @@ def delete(id):
 @articles_bp.route('/admin/articles/<int:id>/toggle_publish', methods=['POST'])
 @login_required
 def toggle_publish(id):
-    article = Article.query.get_or_404(id)
+    article = db.session.get(Article, id)
+    if not article:
+        abort(404)
     article.is_published = not article.is_published
     db.session.commit()
 
@@ -126,9 +131,8 @@ def public_index():
     per_page = 10
 
     # 分页查询已发布的文章
-    pagination = Article.query.filter_by(is_published=True).order_by(Article.updated_at.desc()).paginate(
-        page=page, per_page=per_page, error_out=False
-    )
+    query = db.select(Article).filter_by(is_published=True).order_by(Article.updated_at.desc())
+    pagination = db.paginate(query, page=page, per_page=per_page, error_out=False)
     articles = pagination.items
 
     return render_template('articles/public_index.html', articles=articles, pagination=pagination)
@@ -136,7 +140,9 @@ def public_index():
 # 前台文章详情
 @articles_bp.route('/articles/<int:id>')
 def public_show(id):
-    article = Article.query.filter_by(id=id, is_published=True).first_or_404()
+    article = db.session.execute(db.select(Article).filter_by(id=id, is_published=True)).scalar_one_or_none()
+    if not article:
+        abort(404)
     return render_template('articles/public_show.html', article=article)
 
 # 主题切换
