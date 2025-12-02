@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, request, flash, session
+from flask import Blueprint, render_template, redirect, url_for, request, flash, session, abort
 from models import db, Article
 from auth import login_required
 
@@ -54,7 +54,9 @@ def new():
 @articles_bp.route('/admin/articles/<int:article_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit(article_id):
-    article = Article.query.get_or_404(article_id)
+    article = db.session.get(Article, article_id)
+    if not article:
+        abort(404)
     
     if request.method == 'POST':
         title = request.form['title'].strip()
@@ -84,7 +86,9 @@ def edit(article_id):
 @articles_bp.route('/admin/articles/<int:article_id>/delete')
 @login_required
 def delete(article_id):
-    article = Article.query.get_or_404(article_id)
+    article = db.session.get(Article, article_id)
+    if not article:
+        abort(404)
     db.session.delete(article)
     db.session.commit()
     
@@ -95,7 +99,9 @@ def delete(article_id):
 @articles_bp.route('/admin/articles/<int:article_id>/toggle-publish')
 @login_required
 def toggle_publish(article_id):
-    article = Article.query.get_or_404(article_id)
+    article = db.session.get(Article, article_id)
+    if not article:
+        abort(404)
     article.is_published = not article.is_published
     db.session.commit()
     
@@ -108,16 +114,18 @@ def toggle_publish(article_id):
 def index():
     page = request.args.get('page', 1, type=int)
     
-    pagination = Article.query.filter_by(is_published=True)
+    pagination = (Article.query.filter_by(is_published=True)
         .order_by(Article.created_at.desc())
-        .paginate(page=page, per_page=10, error_out=False)
+        .paginate(page=page, per_page=10, error_out=False))
     
     return render_template('front/index.html', pagination=pagination)
 
 # 前台文章详情
 @articles_bp.route('/articles/<int:article_id>')
 def detail(article_id):
-    article = Article.query.filter_by(id=article_id, is_published=True).first_or_404()
+    article = db.session.get(Article, article_id)
+    if not article or not article.is_published:
+        abort(404)
     return render_template('front/detail.html', article=article)
 
 # 主题切换
