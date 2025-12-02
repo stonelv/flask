@@ -37,3 +37,6 @@ from .templating import stream_template as stream_template
 from .templating import stream_template_string as stream_template_string
 from .wrappers import Request as Request
 from .wrappers import Response as Response
+from .auth import auth_bp as auth_bp
+from .articles import articles_bp as articles_bp
+from .models import db as db

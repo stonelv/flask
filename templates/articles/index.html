@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN" {% if session.theme == 'dark' %}class="dark-theme"{% endif %}>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文章管理</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>文章管理</h1>
+            <div class="header-actions">
+                <a href="{{ url_for('articles.toggle_theme') }}" class="btn btn-secondary">
+                    {% if session.theme == 'dark' %}切换到亮色主题{% else %}切换到暗色主题{% endif %}
+                </a>
+                <a href="{{ url_for('articles.new') }}" class="btn btn-primary">新建文章</a>
+                <a href="{{ url_for('auth.logout') }}" class="btn btn-danger">登出</a>
+            </div>
+        </header>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="search-form">
+            <form method="GET" action="{{ url_for('articles.index') }}">
+                <input type="text" name="search" placeholder="搜索文章标题或内容" value="{{ search }}">
+                <button type="submit" class="btn btn-secondary">搜索</button>
+            </form>
+        </div>
+
+        <table class="article-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>标题</th>
+                    <th>发布状态</th>
+                    <th>创建时间</th>
+                    <th>更新时间</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for article in articles %} 
+                    <tr>
+                        <td>{{ article.id }}</td>
+                        <td>{{ article.title }}</td>
+                        <td>
+                            {% if article.is_published %} 
+                                <span class="status-published">已发布</span>
+                            {% else %} 
+                                <span class="status-draft">草稿</span>
+                            {% endif %} 
+                        </td>
+                        <td>{{ article.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        <td>{{ article.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        <td>
+                            <a href="{{ url_for('articles.edit', id=article.id) }}" class="btn btn-sm btn-primary">编辑</a>
+                            <form method="POST" action="{{ url_for('articles.toggle_publish', id=article.id) }}" style="display: inline;">
+                                <button type="submit" class="btn btn-sm btn-secondary">
+                                    {% if article.is_published %}取消发布{% else %}发布{% endif %}
+                                </button>
+                            </form>
+                            <form method="POST" action="{{ url_for('articles.delete', id=article.id) }}" style="display: inline;" onsubmit="return confirm('确定要删除这篇文章吗？');">
+                                <button type="submit" class="btn btn-sm btn-danger">删除</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %} 
+            </tbody>
+        </table>
+
+        <!-- 分页 -->
+        {% if pagination.pages > 1 %} 
+            <div class="pagination">
+                {% if pagination.has_prev %} 
+                    <a href="{{ url_for('articles.index', page=pagination.prev_num, search=search) }}" class="btn btn-sm btn-secondary">&laquo; 上一页</a>
+                {% endif %} 
+
+                {% for page_num in pagination.iter_pages() %} 
+                    {% if page_num %} 
+                        {% if page_num == pagination.page %} 
+                            <span class="current-page">{{ page_num }}</span>
+                        {% else %} 
+                            <a href="{{ url_for('articles.index', page=page_num, search=search) }}" class="btn btn-sm btn-secondary">{{ page_num }}</a>
+                        {% endif %} 
+                    {% else %} 
+                        <span class="ellipsis">...</span>
+                    {% endif %} 
+                {% endfor %} 
+
+                {% if pagination.has_next %} 
+                    <a href="{{ url_for('articles.index', page=pagination.next_num, search=search) }}" class="btn btn-sm btn-secondary">下一页 &raquo;</a>
+                {% endif %} 
+            </div>
+        {% endif %} 
+    </div>
+</body>
+</html>

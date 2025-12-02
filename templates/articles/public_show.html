@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-CN" {% if session.theme == 'dark' %}class="dark-theme"{% endif %}>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ article.title }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>{{ article.title }}</h1>
+            <div class="header-actions">
+                <a href="{{ url_for('articles.toggle_theme') }}" class="btn btn-secondary">
+                    {% if session.theme == 'dark' %}切换到亮色主题{% else %}切换到暗色主题{% endif %}
+                </a>
+                <a href="{{ url_for('articles.public_index') }}" class="btn btn-secondary">返回列表</a>
+                <a href="{{ url_for('auth.login') }}" class="btn btn-primary">后台管理</a>
+            </div>
+        </header>
+
+        <article class="article-detail">
+            <div class="article-meta">
+                <span>发布时间: {{ article.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+                <span>更新时间: {{ article.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+            </div>
+            <div class="article-content">
+                {{ article.content|safe }}
+            </div>
+        </article>
+    </div>
+</body>
+</html>
