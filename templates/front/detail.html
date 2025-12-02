@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ article.title }}{% endblock %}
+
+{% block content %}
+<article class="article-detail">
+    <header class="article-header">
+        <h1>{{ article.title }}</h1>
+        <div class="article-meta">
+            <time datetime="{{ article.created_at.isoformat() }}">发布于 {{ article.created_at.strftime('%Y-%m-%d %H:%M') }}</time>
+            {% if article.updated_at != article.created_at %}
+                <span>更新于 {{ article.updated_at.strftime('%Y-%m-%d %H:%M') }}</span>
+            {% endif %}
+        </div>
+    </header>
+    <div class="article-content">
+        {{ article.content|replace('\n', '<br>')|safe }}
+    </div>
+    <div class="article-actions">
+        <a href="{{ url_for('articles.index') }}" class="btn btn-secondary">返回列表</a>
+    </div>
+</article>
+{% endblock %}
