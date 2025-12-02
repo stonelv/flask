@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+
+{% block title %}文章管理 - 文章管理系统{% endblock %}
+
+{% block header %}
+{{ super() }}
+<div class="theme-toggle">
+    <form method="POST" action="{{ url_for('articles.toggle_theme') }}">
+        <button type="submit" class="btn btn-secondary">
+            {{ '切换到浅色主题' if theme == 'dark' else '切换到深色主题' }}
+        </button>
+    </form>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="articles-container">
+    <h1>文章管理</h1>
+    
+    <!-- 搜索表单 -->
+    <div class="search-form">
+        <form method="GET" action="{{ url_for('articles.index') }}">
+            <input type="text" name="keyword" placeholder="按标题搜索文章..." value="{{ keyword }}">
+            <button type="submit" class="btn btn-primary">搜索</button>
+            {% if keyword %}
+            <a href="{{ url_for('articles.index') }}" class="btn btn-secondary">清除</a>
+            {% endif %}
+        </form>
+    </div>
+    
+    <!-- 新建文章按钮 -->
+    <div class="action-buttons">
+        <a href="{{ url_for('articles.new') }}" class="btn btn-success">新建文章</a>
+    </div>
+    
+    <!-- 文章列表 -->
+    <table class="articles-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>标题</th>
+                <th>发布状态</th>
+                <th>创建时间</th>
+                <th>更新时间</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if articles.items %} 
+            {% for article in articles.items %} 
+            <tr>
+                <td>{{ article.id }}</td>
+                <td>{{ article.title }}</td>
+                <td>
+                    <span class="status-badge {{ 'published' if article.is_published else 'draft' }}">
+                        {{ '已发布' if article.is_published else '草稿' }}
+                    </span>
+                </td>
+                <td>{{ article.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td>{{ article.updated_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td class="action-buttons">
+                    <a href="{{ url_for('articles.edit', id=article.id) }}" class="btn btn-sm btn-primary">编辑</a>
+                    <form method="POST" action="{{ url_for('articles.toggle_publish', id=article.id) }}" style="display: inline;">
+                        <button type="submit" class="btn btn-sm {{ 'btn-warning' if article.is_published else 'btn-info' }}">
+                            {{ '取消发布' if article.is_published else '发布' }}
+                        </button>
+                    </form>
+                    <form method="POST" action="{{ url_for('articles.delete', id=article.id) }}" style="display: inline;">
+                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('确定要删除这篇文章吗？')">删除</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %} 
+            {% else %} 
+            <tr>
+                <td colspan="7" class="empty-state">
+                    {% if keyword %} 
+                    没有找到与 "{{ keyword }}" 相关的文章。
+                    {% else %} 
+                    还没有任何文章，点击"新建文章"开始创建。
+                    {% endif %} 
+                </td>
+            </tr>
+            {% endif %} 
+        </tbody>
+    </table>
+    
+    <!-- 分页控制 -->
+    {% if articles.pages > 1 %} 
+    <div class="pagination">
+        <ul>
+            <!-- 上一页 -->
+            <li {% if not articles.has_prev %} class="disabled" {% endif %}>
+                <a href="{{ url_for('articles.index', page=articles.prev_num, keyword=keyword) if articles.has_prev else '#' }}">
+                    上一页
+                </a>
+            </li>
+            
+            <!-- 页码 -->
+            {% for page_num in articles.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %} 
+            {% if page_num %} 
+            <li {% if page_num == articles.page %} class="active" {% endif %}>
+                <a href="{{ url_for('articles.index', page=page_num, keyword=keyword) }}">
+                    {{ page_num }}
+                </a>
+            </li>
+            {% else %} 
+            <li class="ellipsis">
+                <span>...</span>
+            </li>
+            {% endif %} 
+            {% endfor %} 
+            
+            <!-- 下一页 -->
+            <li {% if not articles.has_next %} class="disabled" {% endif %}>
+                <a href="{{ url_for('articles.index', page=articles.next_num, keyword=keyword) if articles.has_next else '#' }}">
+                    下一页
+                </a>
+            </li>
+        </ul>
+    </div>
+    {% endif %} 
+</div>
+{% endblock %}

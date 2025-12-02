@@ -37,3 +37,53 @@ from .templating import stream_template as stream_template
 from .templating import stream_template_string as stream_template_string
 from .wrappers import Request as Request
 from .wrappers import Response as Response
+
+# 导入文章管理系统模块
+from .auth import auth_bp
+from .articles import articles_bp
+from .models import db, Article
+
+
+def init_article_management(app):
+    """初始化文章管理系统
+    
+    Args:
+        app: Flask 应用实例
+    """
+    # 配置数据库
+    if not app.config.get('SQLALCHEMY_DATABASE_URI'):
+        app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///articles.db'
+    
+    app.config.setdefault('SQLALCHEMY_TRACK_MODIFICATIONS', False)
+    
+    # 初始化数据库
+    db.init_app(app)
+    
+    # 注册蓝图
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(articles_bp)
+    
+    # 创建数据库表（如果不存在）
+    with app.app_context():
+        db.create_all()
+
+
+# 导出文章管理系统模块
+__all__ = [
+    'Flask', 'Blueprint', 'Config',
+    'after_this_request', 'copy_current_request_context',
+    'has_app_context', 'has_request_context',
+    'current_app', 'g', 'request', 'session',
+    'abort', 'flash', 'get_flashed_messages', 'get_template_attribute',
+    'make_response', 'redirect', 'send_file', 'send_from_directory',
+    'stream_with_context', 'url_for',
+    'jsonify',
+    'appcontext_popped', 'appcontext_pushed', 'appcontext_tearing_down',
+    'before_render_template', 'got_request_exception', 'message_flashed',
+    'request_finished', 'request_started', 'request_tearing_down',
+    'template_rendered',
+    'render_template', 'render_template_string', 'stream_template',
+    'stream_template_string',
+    'Request', 'Response',
+    'auth_bp', 'articles_bp', 'db', 'Article', 'init_article_management'
+]

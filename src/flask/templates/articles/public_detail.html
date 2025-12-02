@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ article.title }} - 文章管理系统{% endblock %}
+
+{% block content %}
+<div class="public-article-detail-container">
+    <article class="article-detail">
+        <h1 class="article-title">{{ article.title }}</h1>
+        <div class="article-meta">
+            <span class="article-date">
+                {{ article.created_at.strftime('%Y-%m-%d %H:%M') }}
+            </span>
+            {% if article.updated_at != article.created_at %}
+            <span class="article-updated">
+                最后更新：{{ article.updated_at.strftime('%Y-%m-%d %H:%M') }}
+            </span>
+            {% endif %}
+            <span class="article-status published">已发布</span>
+        </div>
+        <div class="article-content">
+            {{ article.content|safe }}
+        </div>
+    </article>
+    
+    <div class="article-actions">
+        <a href="{{ url_for('articles.public_list') }}" class="btn btn-secondary">
+            返回文章列表
+        </a>
+    </div>
+</div>
+{% endblock %}
