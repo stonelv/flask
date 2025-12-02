@@ -1,5 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from datetime import datetime, UTC
 
 # 创建 SQLAlchemy 实例
 db = SQLAlchemy()
@@ -14,8 +14,8 @@ class Article(db.Model):
     title = db.Column(db.String(120), nullable=False)
     content = db.Column(db.Text, nullable=False)
     is_published = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
     
     # 构造函数
     def __init__(self, title, content, is_published=False):
@@ -55,7 +55,11 @@ class Article(db.Model):
     # 类方法：根据ID获取文章
     @classmethod
     def get_by_id(cls, id):
-        return cls.query.get_or_404(id)
+        article = db.session.get(cls, id)
+        if article is None:
+            from flask import abort
+            abort(404)
+        return article
     
     # 类方法：获取已发布的文章
     @classmethod

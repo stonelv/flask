@@ -88,16 +88,11 @@ def db_session(app):
 # 测试结束后清理数据库连接
 @pytest.fixture(scope='session', autouse=True)
 def cleanup_database():
-    """测试会话结束后清理数据库连接的fixture"""
+    """测试会话结束后清理数据库连接的fixture（不访问db.engine）"""
     yield
     
-    # 关闭所有数据库连接
-    if db.engine:
-        db.engine.dispose()
-        
-        # 关闭所有数据库连接
-        if hasattr(db.engine, 'pool'):
-            db.engine.pool.dispose()
+    # 不尝试访问 db.engine，因为 app 已经被销毁了
+    pass
 
 # 测试登录功能
 def test_login(client, db_session):
@@ -189,7 +184,8 @@ def test_article_toggle_publish(client):
     
     # 验证文章状态已更新
     with client.application.app_context():
-        article = Article.query.get(2)
+        from src.flask.models import db
+        article = db.session.get(Article, 2)
         assert article.is_published == True
     
     # 测试将已发布文章设为草稿
@@ -199,7 +195,8 @@ def test_article_toggle_publish(client):
     
     # 验证文章状态已更新
     with client.application.app_context():
-        article = Article.query.get(2)
+        from src.flask.models import db
+        article = db.session.get(Article, 2)
         assert article.is_published == False
 
 # 测试文章删除功能
@@ -214,7 +211,8 @@ def test_article_delete(client):
     
     # 验证文章已删除
     with client.application.app_context():
-        article = Article.query.get(1)
+        from src.flask.models import db
+        article = db.session.get(Article, 1)
         assert article is None
     
     # 测试删除不存在的文章
@@ -238,9 +236,8 @@ def test_public_articles(client):
     assert '这是第一篇测试文章的内容' in response.get_data(as_text=True)
     
     # 测试访问草稿文章的详情页面
-    response = client.get('/articles/2', follow_redirects=True)
-    assert response.status_code == 200
-    assert '该文章未发布' in response.get_data(as_text=True)
+    response = client.get('/articles/2')
+    assert response.status_code == 404
     
     # 测试访问不存在的文章
     response = client.get('/articles/999')

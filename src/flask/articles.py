@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, abort
 from .models import Article, db
 from .auth import login_required
 from sqlalchemy.exc import SQLAlchemyError
@@ -179,10 +179,9 @@ def public_detail(id):
     # 获取要查看的文章
     article = Article.get_by_id(id)
     
-    # 检查文章是否已发布
-    if not article.is_published:
-        flash('该文章未发布', 'warning')
-        return redirect(url_for('articles.public_list'))
+    # 检查文章是否存在或已发布
+    if not article or not article.is_published:
+        abort(404)
     
     # 渲染前台文章详情模板
     return render_template('articles/public_detail.html', article=article)
