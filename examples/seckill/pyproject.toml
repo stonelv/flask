@@ -1,0 +1,18 @@
+[project]
+name = "seckill-app"
+version = "1.0.0"
+description = "A Flask + SQLAlchemy seckill (flash sale) API demo"
+requires-python = ">=3.10"
+dependencies = [
+    "flask>=3.0.0",
+    "flask-sqlalchemy>=3.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+]
+
+[build-system]
+requires = ["flit_core<4"]
+build-backend = "flit_core.buildapi"
