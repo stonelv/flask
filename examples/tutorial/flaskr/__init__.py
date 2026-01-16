@@ -1,6 +1,7 @@
 import os
+import time
 
-from flask import Flask
+from flask import Flask, jsonify, request
 
 
 def create_app(test_config=None):
@@ -29,6 +30,18 @@ def create_app(test_config=None):
     @app.route("/hello")
     def hello():
         return "Hello, World!"
+
+    # 添加使用速率限制的路由示例
+    from .rate_limit import rate_limit
+    
+    @app.route("/api/limited")
+    @rate_limit(limit=10, window_seconds=60)
+    def limited_resource():
+        return jsonify({
+            "message": "Success! This is a rate-limited resource.",
+            "ip": request.remote_addr,
+            "timestamp": time.time()
+        })
 
     # register the database commands
     from . import db

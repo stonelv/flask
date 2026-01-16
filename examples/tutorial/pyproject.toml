@@ -38,3 +38,8 @@ source = ["flaskr", "tests"]
 
 [tool.ruff]
 src = ["src"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+]
