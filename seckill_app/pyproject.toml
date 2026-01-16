@@ -1,0 +1,21 @@
+[project]
+name = "seckill_app"
+version = "0.1.0"
+description = "Flask + SQLAlchemy 商品秒杀系统"
+dependencies = [
+    "flask>=2.3.0",
+    "flask-sqlalchemy>=3.1.0",
+    "werkzeug>=2.3.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "requests>=2.31.0",
+    "gevent>=23.9.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
