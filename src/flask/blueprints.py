@@ -17,6 +17,8 @@ from .typing import TemplateTestCallable
 from .typing import URLDefaultCallable
 from .typing import URLValuePreprocessorCallable
 
+F = t.TypeVar("F", bound=t.Callable[..., t.Any])
+
 if t.TYPE_CHECKING:
     from .app import Flask
     from .typing import ErrorHandlerCallable
@@ -569,15 +571,13 @@ class Blueprint(Scaffold):
         )
         return f
 
-    def app_errorhandler(self, code: t.Union[t.Type[Exception], int]) -> t.Callable:
+    def app_errorhandler(self, code: t.Union[t.Type[Exception], int]) -> t.Callable[[F], F]:
         """Like :meth:`Flask.errorhandler` but for a blueprint.  This
         handler is used for all requests, even if outside of the blueprint.
         """
 
-        def decorator(
-            f: "ErrorHandlerCallable[Exception]",
-        ) -> "ErrorHandlerCallable[Exception]":
-            self.record_once(lambda s: s.app.errorhandler(code)(f))
+        def decorator(f: F) -> F:
+            self.record_once(lambda s: s.app.errorhandler(code)(t.cast("ErrorHandlerCallable[Exception]", f)))
             return f
 
         return decorator

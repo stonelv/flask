@@ -653,10 +653,7 @@ class Scaffold:
     @setupmethod
     def errorhandler(
         self, code_or_exception: t.Union[t.Type[GenericException], int]
-    ) -> t.Callable[
-        ["ErrorHandlerCallable[GenericException]"],
-        "ErrorHandlerCallable[GenericException]",
-    ]:
+    ) -> t.Callable[[F], F]:
         """Register a function to handle errors by code or exception class.
 
         A decorator that is used to register a function given an
@@ -686,10 +683,8 @@ class Scaffold:
                                   an arbitrary exception
         """
 
-        def decorator(
-            f: "ErrorHandlerCallable[GenericException]",
-        ) -> "ErrorHandlerCallable[GenericException]":
-            self.register_error_handler(code_or_exception, f)
+        def decorator(f: F) -> F:
+            self.register_error_handler(code_or_exception, t.cast("ErrorHandlerCallable[GenericException]", f))
             return f
 
         return decorator

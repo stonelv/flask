@@ -287,3 +287,50 @@ class TestGenericHandlers:
         assert client.get("/error").data == b"direct KeyError"
         assert client.get("/abort").data == b"direct InternalServerError"
         assert client.get("/not-found").data == b"direct NotFound"
+
+
+def test_error_handler_chain_decoration(app, client):
+    """Test that multiple errorhandler decorators can be chained."""
+    class ExceptionA(Exception):
+        pass
+
+    class ExceptionB(Exception):
+        pass
+
+    # Test chained errorhandler decorators on blueprint
+    blueprint = flask.Blueprint("test", __name__)
+
+    @blueprint.errorhandler(ExceptionB)
+    @blueprint.errorhandler(ExceptionA)
+    def handle_exceptions(e):
+        return f"handled: {type(e).__name__}"
+
+    @blueprint.route("/raise-a")
+    def raise_a():
+        raise ExceptionA()
+
+    @blueprint.route("/raise-b")
+    def raise_b():
+        raise ExceptionB()
+
+    app.register_blueprint(blueprint)
+
+    # Test chained errorhandler decorators on app
+    @app.errorhandler(ExceptionB)
+    @app.errorhandler(ExceptionA)
+    def app_handle_exceptions(e):
+        return f"app-handled: {type(e).__name__}"
+
+    @app.route("/app-raise-a")
+    def app_raise_a():
+        raise ExceptionA()
+
+    @app.route("/app-raise-b")
+    def app_raise_b():
+        raise ExceptionB()
+
+    # Test the endpoints
+    assert client.get("/raise-a").data == b"handled: ExceptionA"
+    assert client.get("/raise-b").data == b"handled: ExceptionB"
+    assert client.get("/app-raise-a").data == b"app-handled: ExceptionA"
+    assert client.get("/app-raise-b").data == b"app-handled: ExceptionB"
