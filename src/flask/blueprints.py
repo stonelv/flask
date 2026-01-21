@@ -573,10 +573,11 @@ class Blueprint(Scaffold):
         """Like :meth:`Flask.errorhandler` but for a blueprint.  This
         handler is used for all requests, even if outside of the blueprint.
         """
+        E = t.TypeVar("E", bound=Exception, contravariant=True)
 
         def decorator(
-            f: "ErrorHandlerCallable[Exception]",
-        ) -> "ErrorHandlerCallable[Exception]":
+            f: "ErrorHandlerCallable[E]",
+        ) -> "ErrorHandlerCallable[E]":
             self.record_once(lambda s: s.app.errorhandler(code)(f))
             return f
 

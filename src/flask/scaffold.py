@@ -654,8 +654,8 @@ class Scaffold:
     def errorhandler(
         self, code_or_exception: t.Union[t.Type[GenericException], int]
     ) -> t.Callable[
-        ["ErrorHandlerCallable[GenericException]"],
-        "ErrorHandlerCallable[GenericException]",
+        ["ErrorHandlerCallable[E]"],
+        "ErrorHandlerCallable[E]",
     ]:
         """Register a function to handle errors by code or exception class.
 
@@ -685,10 +685,11 @@ class Scaffold:
         :param code_or_exception: the code as integer for the handler, or
                                   an arbitrary exception
         """
+        E = t.TypeVar("E", bound=Exception, contravariant=True)
 
         def decorator(
-            f: "ErrorHandlerCallable[GenericException]",
-        ) -> "ErrorHandlerCallable[GenericException]":
+            f: "ErrorHandlerCallable[E]",
+        ) -> "ErrorHandlerCallable[E]":
             self.register_error_handler(code_or_exception, f)
             return f
 
@@ -698,7 +699,7 @@ class Scaffold:
     def register_error_handler(
         self,
         code_or_exception: t.Union[t.Type[GenericException], int],
-        f: "ErrorHandlerCallable[GenericException]",
+        f: "ErrorHandlerCallable[t.Any]",
     ) -> None:
         """Alternative error attach function to the :meth:`errorhandler`
         decorator that is more straightforward to use for non decorator
