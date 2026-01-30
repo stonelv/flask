@@ -1,0 +1,15 @@
+[project]
+name = "seckill"
+version = "0.1.0"
+description = "Flask SQLAlchemy Seckill Example"
+requires-python = ">=3.10"
+dependencies = [
+  "flask >= 3.0.0",
+  "flask-sqlalchemy >= 3.0.0",
+  "pytest >= 7.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+]
