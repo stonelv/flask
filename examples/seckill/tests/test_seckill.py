@@ -1,22 +1,14 @@
 import pytest
 import threading
-import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from app import create_app, db, Product, Order
+from seckill import create_app
+from seckill.extensions import db
+from seckill.models import Product, Order
 
 
 @pytest.fixture
 def app():
-    test_config = {
-        'TESTING': True,
-        'SQLALCHEMY_DATABASE_URI': 'sqlite:///test_seckill.db?check_same_thread=False',
-        'SQLALCHEMY_TRACK_MODIFICATIONS': False,
-        'SQLALCHEMY_ENGINE_OPTIONS': {
-            'pool_pre_ping': True,
-            'pool_recycle': 3600
-        }
-    }
-    app = create_app(test_config)
+    app = create_app('testing')
     
     with app.app_context():
         db.create_all()
@@ -207,3 +199,19 @@ def test_multiple_products_concurrent_seckill(app):
         assert p2.stock == 0
         assert results['p1_success'] == 5
         assert results['p2_success'] == 8
+
+
+def test_wal_mode_enabled(app):
+    with app.app_context():
+        from sqlalchemy import text
+        result = db.session.execute(text("PRAGMA journal_mode"))
+        mode = result.fetchone()[0]
+        assert mode == 'wal', f'Expected WAL mode, got {mode}'
+
+
+def test_foreign_keys_enabled(app):
+    with app.app_context():
+        from sqlalchemy import text
+        result = db.session.execute(text("PRAGMA foreign_keys"))
+        fk_enabled = result.fetchone()[0]
+        assert fk_enabled == 1, f'Expected foreign keys enabled, got {fk_enabled}'
