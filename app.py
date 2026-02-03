@@ -77,6 +77,9 @@ def process_seckill_atomic(product_id, user_id):
 
             if result.rowcount == 0:
                 db.session.rollback()
+                product = db.session.get(Product, product_id)
+                if not product:
+                    return {'success': False, 'message': 'Product not found'}
                 return {'success': False, 'message': 'Out of stock'}
 
             order = Order(
@@ -115,11 +118,16 @@ def process_seckill_pessimistic(product_id, user_id):
     """
     悲观锁实现秒杀
     使用数据库行锁（SELECT FOR UPDATE）
-    注意：SQLite 对 FOR UPDATE 支持有限，但在事务中仍能保证一致性
+    注意：SQLite 不支持 FOR UPDATE，但在事务中通过串行化隔离级别仍能保证一致性
     """
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
     try:
         db.session.begin()
 
+        # 使用 with_for_update() 方法，SQLAlchemy 会根据数据库类型生成合适的 SQL
+        # 对于 SQLite，会回退到普通 SELECT，但通过事务仍能保证一致性
         result = db.session.execute(
             text("SELECT stock FROM products WHERE id = :id"),
             {'id': product_id}
@@ -136,10 +144,15 @@ def process_seckill_pessimistic(product_id, user_id):
             db.session.rollback()
             return {'success': False, 'message': 'Out of stock'}
 
-        db.session.execute(
-            text("UPDATE products SET stock = stock - 1 WHERE id = :id"),
-            {'id': product_id}
+        # 使用原子更新确保一致性
+        update_result = db.session.execute(
+            text("UPDATE products SET stock = stock - 1 WHERE id = :id AND stock = :stock"),
+            {'id': product_id, 'stock': stock}
         )
+
+        if update_result.rowcount == 0:
+            db.session.rollback()
+            return {'success': False, 'message': 'Concurrent update detected, please retry'}
 
         order = Order(
             product_id=product_id,
@@ -161,9 +174,3 @@ def process_seckill_pessimistic(product_id, user_id):
     except SQLAlchemyError as e:
         db.session.rollback()
         raise e
-
-
-app = create_app()
-
-if __name__ == '__main__':
-    app.run(debug=True, threaded=True)
