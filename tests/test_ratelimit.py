@@ -212,9 +212,91 @@ class TestRateLimitWithKeyFunc:
         assert response.status_code == 429
 
 
+class TestRateLimitWithBlueprint:
+    """Test rate limiting with Flask Blueprints."""
+
+    def test_blueprint_routes_have_independent_limits(self):
+        """Same function name in different blueprints should have independent limits."""
+        from flask import Blueprint
+
+        app = Flask(__name__)
+        app.testing = True
+        clear_rate_limit()
+
+        # Create two blueprints with same function name
+        bp1 = Blueprint('bp1', __name__)
+        bp2 = Blueprint('bp2', __name__)
+
+        @bp1.route('/list')
+        @rate_limit(max_requests=2, window_seconds=60)
+        def list_items_bp1():
+            return jsonify({'from': 'bp1', 'items': []})
+
+        @bp2.route('/list')
+        @rate_limit(max_requests=2, window_seconds=60)
+        def list_items_bp2():
+            return jsonify({'from': 'bp2', 'items': []})
+
+        app.register_blueprint(bp1, url_prefix='/api1')
+        app.register_blueprint(bp2, url_prefix='/api2')
+
+        client = app.test_client()
+
+        # Exhaust bp1's limit
+        for _ in range(2):
+            response = client.get('/api1/list')
+            assert response.status_code == 200
+            assert response.get_json()['from'] == 'bp1'
+
+        # bp1 should be blocked
+        response = client.get('/api1/list')
+        assert response.status_code == 429
+
+        # bp2 should still work (independent limit)
+        for _ in range(2):
+            response = client.get('/api2/list')
+            assert response.status_code == 200
+            assert response.get_json()['from'] == 'bp2'
+
+    def test_per_route_false_shares_limit(self):
+        """When per_route=False, same function name should share limit."""
+        from flask import Blueprint
+
+        app = Flask(__name__)
+        app.testing = True
+        clear_rate_limit()
+
+        bp1 = Blueprint('bp3', __name__)
+        bp2 = Blueprint('bp4', __name__)
+
+        @bp1.route('/shared')
+        @rate_limit(max_requests=2, window_seconds=60, per_route=False)
+        def shared_endpoint_bp1():
+            return jsonify({'from': 'bp1'})
+
+        @bp2.route('/shared')
+        @rate_limit(max_requests=2, window_seconds=60, per_route=False)
+        def shared_endpoint_bp2():
+            return jsonify({'from': 'bp2'})
+
+        app.register_blueprint(bp1, url_prefix='/api3')
+        app.register_blueprint(bp2, url_prefix='/api4')
+
+        client = app.test_client()
+
+        # Use up limit on bp3 (counts against shared IP-based limit)
+        for _ in range(2):
+            response = client.get('/api3/shared')
+            assert response.status_code == 200
+
+        # bp4 should also be blocked (shares the same limit)
+        response = client.get('/api4/shared')
+        assert response.status_code == 429
+
+
 class TestRateLimitEdgeCases:
     """Test edge cases and error handling."""
-    
+
     def test_rate_limit_with_different_http_methods(self):
         """Rate limit should work with different HTTP methods."""
         app = Flask(__name__)

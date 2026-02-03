@@ -123,15 +123,22 @@ def rate_limit(
         Retry-After: 45
     """
     def decorator(f: t.Callable[..., t.Any]) -> t.Callable[..., t.Any]:
-        # Store the function name for per-route rate limiting
-        route_name = f.__name__
-
         @wraps(f)
         def decorated_function(*args: t.Any, **kwargs: t.Any) -> t.Any:
             # Get the key for this request
             base_key = key_func() if key_func else _get_client_ip()
-            # Include route name in key if per_route is True
-            key = f"{base_key}:{route_name}" if per_route else base_key
+
+            # Include route identifier in key if per_route is True
+            # Use request.endpoint which includes blueprint name (e.g., "blueprint.view_func")
+            # This is more reliable than f.__name__ which can have collisions
+            if per_route:
+                # request.endpoint is set after routing, use it if available
+                # Otherwise fall back to f.__name__ (should not happen in normal Flask flow)
+                route_id = request.endpoint or f.__name__
+                key = f"{base_key}:{route_id}"
+            else:
+                key = base_key
+
             current_time = time.time()
 
             with _records_lock:
