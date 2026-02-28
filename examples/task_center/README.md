@@ -29,6 +29,28 @@ examples/task_center/
 
 ## 快速开始
 
+### 初始化数据库
+
+首次运行前需要初始化数据库（默认使用 SQLite，文件为 `tasks.db`）：
+
+```bash
+cd examples/task_center
+FLASK_APP=src/task_center flask init-db
+```
+
+如需重置数据库：
+
+```bash
+FLASK_APP=src/task_center flask drop-db
+FLASK_APP=src/task_center flask init-db
+```
+
+也可以通过环境变量 `DATABASE` 指定其他数据库 URL：
+
+```bash
+DATABASE=sqlite:///custom.db FLASK_APP=src/task_center flask init-db
+```
+
 ### 安装依赖
 
 ```bash
@@ -75,20 +97,24 @@ Content-Type: application/json
 
 ```json
 {
-    "id": "uuid-xxx",
-    "type": "long_running_task",
-    "status": "PENDING",
-    "progress": 0,
-    "stage": "",
-    "payload": {"duration": 15},
-    "result": null,
-    "error": null,
-    "idempotency_key": "unique-request-key",
-    "created_at": "2026-02-28T...",
-    "updated_at": "2026-02-28T...",
-    "started_at": null,
-    "finished_at": null,
-    "logs": []
+    "code": 0,
+    "message": "Success",
+    "data": {
+        "id": "uuid-xxx",
+        "type": "long_running_task",
+        "status": "PENDING",
+        "progress": 0,
+        "stage": "",
+        "payload": {"duration": 15},
+        "result": null,
+        "error": null,
+        "idempotency_key": "unique-request-key",
+        "created_at": "2026-02-28T...",
+        "updated_at": "2026-02-28T...",
+        "started_at": null,
+        "finished_at": null,
+        "logs": []
+    }
 }
 ```
 
@@ -108,12 +134,16 @@ GET /api/tasks?status=RUNNING&type=long_running_task&page=1&per_page=20
 
 ```json
 {
-    "tasks": [...],
-    "pagination": {
-        "page": 1,
-        "per_page": 20,
-        "total": 42,
-        "total_pages": 3
+    "code": 0,
+    "message": "Success",
+    "data": {
+        "tasks": [...],
+        "pagination": {
+            "page": 1,
+            "per_page": 20,
+            "total": 42,
+            "total_pages": 3
+        }
     }
 }
 ```
@@ -161,6 +191,7 @@ pytest -v
 - `test_list_tasks` - 任务列表
 - `test_list_tasks_pagination` - 分页功能
 - `test_list_tasks_filter_by_type` - 按类型过滤
+- `test_list_tasks_filter_by_status` - 按状态过滤
 - `test_idempotency_key` - 幂等去重
 - `test_idempotency_concurrent` - 并发幂等安全
 - `test_cancel_pending_task` - 取消任务
@@ -168,6 +199,11 @@ pytest -v
 - `test_task_status_transitions` - 状态转换
 - `test_task_result` - 任务结果
 - `test_task_error` - 错误处理
+- `test_database_persistence` - **数据库持久化**（服务重启后任务仍可查询）
+- `test_db_unique_constraint_concurrent` - **DB唯一约束下的并发幂等**
+- `test_invalid_status_param_returns_400` - **非法参数返回400**
+- `test_invalid_page_param_returns_400` - **非法参数返回400**
+- `test_invalid_per_page_param_returns_400` - **非法参数返回400**
 
 ## 编写自定义任务
 

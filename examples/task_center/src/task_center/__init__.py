@@ -56,6 +56,7 @@ def create_app(test_config: Dict[str, Any] = None) -> Flask:
     config = {
         "TASK_WORKERS": 4,
         "USE_RELOADER": False,
+        "DATABASE": "sqlite:///tasks.db",
     }
     if test_config:
         config.update(test_config)
@@ -65,7 +66,9 @@ def create_app(test_config: Dict[str, Any] = None) -> Flask:
 
     configure_logging(app)
 
-    storage = TaskStorage()
+    storage = TaskStorage(db_url=app.config["DATABASE"])
+    storage.init_db()
+
     executor = TaskExecutor(storage, max_workers=app.config["TASK_WORKERS"])
     register_handlers(executor)
 
@@ -99,5 +102,15 @@ def create_app(test_config: Dict[str, Any] = None) -> Flask:
             },
             "task_types": list(executor._handlers.keys()),
         }
+
+    @app.cli.command("init-db")
+    def init_db():
+        storage.init_db()
+        print("Database initialized.")
+
+    @app.cli.command("drop-db")
+    def drop_db():
+        storage.drop_db()
+        print("Database dropped.")
 
     return app
