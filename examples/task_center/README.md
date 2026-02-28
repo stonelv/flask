@@ -5,9 +5,11 @@
 ## 功能特性
 
 - **Task 持久化模型**：支持 PENDING/RUNNING/SUCCEEDED/FAILED/CANCELLED 五种状态，包含 progress（0-100）、stage、payload/result/error、idempotency_key
-- **幂等创建**：基于 idempotency_key 的并发安全幂等去重，同 key 重复请求不会重复执行
+- **幂等创建**：基于 idempotency_key 的并发安全幂等去重，同 key 重复请求不会重复创建
+- **原子 Claim 执行**：基于数据库 UPDATE...WHERE 的原子操作，同 task 并发下只会被一个 worker 执行
 - **RESTful API**：创建、查询、列表（分页+过滤）、取消
 - **异步执行器**：基于 ThreadPoolExecutor 的后台任务调度
+- **持久化取消请求**：cancel_requested 字段落库，跨进程/重启后取消状态依然有效
 - **协作式取消**：长任务可随时响应取消请求
 - **结构化日志**：JSON 格式输出，包含任务 ID、进度等上下文
 

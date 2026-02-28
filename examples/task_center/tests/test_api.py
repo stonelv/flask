@@ -9,10 +9,15 @@ from task_center.models import TaskStatus
 
 @pytest.fixture
 def app():
-    app = create_app({"TESTING": True, "TASK_WORKERS": 2})
-    yield app
-    executor = app.extensions["task_executor"]
-    executor.stop(wait=True)
+    import tempfile
+    import os
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test.db")
+        db_url = f"sqlite:///{db_path}"
+        app = create_app({"TESTING": True, "TASK_WORKERS": 2, "DATABASE": db_url})
+        yield app
+        executor = app.extensions["task_executor"]
+        executor.stop(wait=True)
 
 
 @pytest.fixture
@@ -396,3 +401,113 @@ def test_invalid_per_page_param_returns_400(client):
     data = resp.get_json()
     assert data["code"] != 0
     assert "Invalid 'per_page'" in data["message"]
+
+
+def test_atomic_claim_no_double_execution(app):
+    import os
+    import tempfile
+    from concurrent.futures import ThreadPoolExecutor as TPE
+    from concurrent.futures import wait
+    from task_center.models import TaskStorage, TaskStatus
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "claim_test.db")
+        db_url = f"sqlite:///{db_path}"
+
+        storage = TaskStorage(db_url)
+        storage.init_db()
+
+        execution_count = [0]
+        execution_lock = threading.Lock()
+
+        def claim_and_execute(task_id):
+            task = storage.claim_for_execution(task_id)
+            if task:
+                with execution_lock:
+                    execution_count[0] += 1
+                time.sleep(0.2)
+                storage.update(task_id, status=TaskStatus.SUCCEEDED)
+                return True
+            return False
+
+        task = storage.create("test_type", {"test": "value"})
+        assert task is not None
+        task_id = task.id
+
+        futures = []
+        with TPE(max_workers=10) as executor:
+            for _ in range(10):
+                fut = executor.submit(claim_and_execute, task_id)
+                futures.append(fut)
+            wait(futures)
+
+        results = [f.result() for f in futures]
+        true_count = sum(1 for r in results if r)
+
+        assert true_count == 1, f"Expected exactly 1 successful claim, got {true_count}"
+        assert execution_count[0] == 1, f"Expected execution exactly once, got {execution_count[0]}"
+
+        final_task = storage.get(task_id)
+        assert final_task.status == TaskStatus.SUCCEEDED
+
+
+def test_cancel_persistence_across_restart(app):
+    import os
+    import tempfile
+    from task_center import create_app
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "cancel_test.db")
+        db_url = f"sqlite:///{db_path}"
+
+        app1 = create_app({"TESTING": True, "TASK_WORKERS": 1, "DATABASE": db_url})
+        client1 = app1.test_client()
+        executor1 = app1.extensions["task_executor"]
+
+        @executor1.register("slow_restart_test")
+        def slow_handler1(ctx):
+            for i in range(20):
+                if ctx.check_cancel():
+                    raise InterruptedError("Cancelled")
+                ctx.update_progress(i * 5, f"Step {i}")
+                time.sleep(0.3)
+            return {"done": True}
+
+        resp = client1.post("/api/tasks", json={"type": "slow_restart_test", "payload": {}})
+        task_id = resp.get_json()["data"]["id"]
+
+        time.sleep(0.2)
+
+        task_before = client1.get(f"/api/tasks/{task_id}").get_json()["data"]
+        assert task_before["status"] in ("PENDING", "RUNNING")
+
+        cancel_resp = client1.post(f"/api/tasks/{task_id}/cancel")
+        assert cancel_resp.status_code == 200
+        cancel_data = cancel_resp.get_json()["data"]
+        assert cancel_data["cancel_requested"] == True or cancel_data["status"] == "CANCELLED"
+
+        app1.extensions["task_executor"].stop(wait=False)
+        del app1
+
+        app2 = create_app({"TESTING": True, "TASK_WORKERS": 1, "DATABASE": db_url})
+        client2 = app2.test_client()
+        executor2 = app2.extensions["task_executor"]
+
+        @executor2.register("slow_restart_test")
+        def slow_handler2(ctx):
+            for i in range(20):
+                if ctx.check_cancel():
+                    raise InterruptedError("Cancelled")
+                ctx.update_progress(i * 5, f"Step {i}")
+                time.sleep(0.3)
+            return {"done": True}
+
+        task_after = client2.get(f"/api/tasks/{task_id}").get_json()["data"]
+        assert task_after["cancel_requested"] == True or task_after["status"] == "CANCELLED"
+
+        if task_after["status"] == "RUNNING":
+            time.sleep(1)
+            task_final = client2.get(f"/api/tasks/{task_id}").get_json()["data"]
+            assert task_final["status"] == "CANCELLED"
+
+        app2.extensions["task_executor"].stop(wait=True)

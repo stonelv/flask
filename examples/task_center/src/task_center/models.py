@@ -1,6 +1,5 @@
 import enum
 import json
-import threading
 import uuid
 from datetime import datetime
 from datetime import timezone
@@ -11,8 +10,10 @@ from typing import Optional
 from typing import Tuple
 from typing import Type
 
+from sqlalchemy import Boolean
 from sqlalchemy import create_engine
 from sqlalchemy import Index
+from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import Mapped
@@ -85,12 +86,11 @@ class TaskModel(Base):
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     logs: Mapped[List[str]] = mapped_column(ListType, default=list)
+    cancel_requested: Mapped[bool] = mapped_column(Boolean, default=False)
 
     __table_args__ = (
         Index("ix_tasks_idempotency_key", "idempotency_key", unique=True),
     )
-
-    _cancel_requested: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -108,10 +108,11 @@ class TaskModel(Base):
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "finished_at": self.finished_at.isoformat() if self.finished_at else None,
             "logs": self.logs,
+            "cancel_requested": self.cancel_requested,
         }
 
     def is_cancelled(self) -> bool:
-        return self._cancel_requested or self.status == TaskStatus.CANCELLED
+        return self.cancel_requested or self.status == TaskStatus.CANCELLED
 
 
 class Task:
@@ -203,12 +204,12 @@ class Task:
         return self._model.logs
 
     @property
-    def _cancel_requested(self) -> bool:
-        return self._model._cancel_requested
+    def cancel_requested(self) -> bool:
+        return self._model.cancel_requested
 
-    @_cancel_requested.setter
-    def _cancel_requested(self, value: bool):
-        self._model._cancel_requested = value
+    @cancel_requested.setter
+    def cancel_requested(self, value: bool):
+        self._model.cancel_requested = value
 
     def to_dict(self) -> Dict[str, Any]:
         return self._model.to_dict()
@@ -221,8 +222,6 @@ class TaskStorage:
     def __init__(self, db_url: str = "sqlite:///tasks.db"):
         self._db_url = db_url
         self._engine = create_engine(db_url, connect_args={"check_same_thread": False} if "sqlite" in db_url else {})
-        self._lock = threading.RLock()
-        self._cancel_requested: Dict[str, bool] = {}
 
     def init_db(self) -> None:
         Base.metadata.create_all(self._engine)
@@ -239,58 +238,71 @@ class TaskStorage:
         payload: Dict[str, Any],
         idempotency_key: Optional[str] = None,
     ) -> Optional[Task]:
-        with self._lock:
-            session = self._session()
-            try:
-                if idempotency_key:
-                    existing = session.query(TaskModel).filter(
-                        TaskModel.idempotency_key == idempotency_key
-                    ).first()
-                    if existing:
-                        task = Task(existing)
-                        if existing._cancel_requested is False and self._cancel_requested.get(existing.id):
-                            task._cancel_requested = True
-                        session.close()
-                        return task
+        session = self._session()
+        try:
+            if idempotency_key:
+                existing = session.query(TaskModel).filter(
+                    TaskModel.idempotency_key == idempotency_key
+                ).first()
+                if existing:
+                    return Task(existing)
 
-                task_id = str(uuid.uuid4())
-                now = datetime.now(timezone.utc)
-                model = TaskModel(
-                    id=task_id,
-                    type=task_type,
-                    status=TaskStatus.PENDING.value,
-                    payload=payload,
-                    idempotency_key=idempotency_key,
-                    created_at=now,
-                    updated_at=now,
+            task_id = str(uuid.uuid4())
+            now = datetime.now(timezone.utc)
+            model = TaskModel(
+                id=task_id,
+                type=task_type,
+                status=TaskStatus.PENDING.value,
+                payload=payload,
+                idempotency_key=idempotency_key,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(model)
+            session.commit()
+            session.refresh(model)
+            return Task(model)
+        except IntegrityError:
+            session.rollback()
+            if idempotency_key:
+                existing = session.query(TaskModel).filter(
+                    TaskModel.idempotency_key == idempotency_key
+                ).first()
+                if existing:
+                    return Task(existing)
+            return None
+        finally:
+            session.close()
+
+    def claim_for_execution(self, task_id: str) -> Optional[Task]:
+        session = self._session()
+        try:
+            stmt = (
+                update(TaskModel)
+                .where(TaskModel.id == task_id)
+                .where(TaskModel.status == TaskStatus.PENDING.value)
+                .where(TaskModel.cancel_requested == False)
+                .values(
+                    status=TaskStatus.RUNNING.value,
+                    started_at=datetime.now(timezone.utc),
+                    updated_at=datetime.now(timezone.utc),
                 )
-                session.add(model)
-                session.commit()
-                session.refresh(model)
-                return Task(model)
-            except IntegrityError:
-                session.rollback()
-                if idempotency_key:
-                    existing = session.query(TaskModel).filter(
-                        TaskModel.idempotency_key == idempotency_key
-                    ).first()
-                    if existing:
-                        task = Task(existing)
-                        session.close()
-                        return task
+                .execution_options(synchronize_session="fetch")
+            )
+            result = session.execute(stmt)
+            session.commit()
+            if result.rowcount == 0:
                 return None
-            finally:
-                session.close()
+            model = session.query(TaskModel).filter(TaskModel.id == task_id).first()
+            return Task(model) if model else None
+        finally:
+            session.close()
 
     def get(self, task_id: str) -> Optional[Task]:
         session = self._session()
         try:
             model = session.query(TaskModel).filter(TaskModel.id == task_id).first()
-            if model:
-                task = Task(model)
-                task._cancel_requested = self._cancel_requested.get(task_id, False)
-                return task
-            return None
+            return Task(model) if model else None
         finally:
             session.close()
 
@@ -313,80 +325,72 @@ class TaskStorage:
             total = query.count()
             start = (page - 1) * per_page
             models = query.offset(start).limit(per_page).all()
-            tasks = []
-            for m in models:
-                task = Task(m)
-                task._cancel_requested = self._cancel_requested.get(m.id, False)
-                tasks.append(task)
+            tasks = [Task(m) for m in models]
             return tasks, total
         finally:
             session.close()
 
     def update(self, task_id: str, **kwargs) -> Optional[Task]:
-        with self._lock:
-            session = self._session()
-            try:
-                model = session.query(TaskModel).filter(TaskModel.id == task_id).first()
-                if not model:
-                    return None
+        session = self._session()
+        try:
+            model = session.query(TaskModel).filter(TaskModel.id == task_id).first()
+            if not model:
+                return None
 
-                for key, value in kwargs.items():
-                    if key == "status" and isinstance(value, TaskStatus):
-                        model.status = value.value
-                    elif hasattr(model, key):
-                        setattr(model, key, value)
+            for key, value in kwargs.items():
+                if key == "status" and isinstance(value, TaskStatus):
+                    model.status = value.value
+                elif hasattr(model, key):
+                    setattr(model, key, value)
 
+            model.updated_at = datetime.now(timezone.utc)
+            session.commit()
+            session.refresh(model)
+            return Task(model)
+        finally:
+            session.close()
+
+    def add_log(self, task_id: str, message: str) -> None:
+        session = self._session()
+        try:
+            model = session.query(TaskModel).filter(TaskModel.id == task_id).first()
+            if model:
+                timestamp = datetime.now(timezone.utc).isoformat()
+                new_logs = list(model.logs) if model.logs else []
+                new_logs.append(f"[{timestamp}] {message}")
+                model.logs = new_logs
+                model.updated_at = datetime.now(timezone.utc)
+                session.commit()
+        finally:
+            session.close()
+
+    def request_cancel(self, task_id: str) -> Optional[Task]:
+        session = self._session()
+        try:
+            model = session.query(TaskModel).filter(TaskModel.id == task_id).first()
+            if not model:
+                return None
+
+            if model.status in (
+                TaskStatus.SUCCEEDED.value,
+                TaskStatus.FAILED.value,
+                TaskStatus.CANCELLED.value,
+            ):
+                return Task(model)
+
+            if model.status == TaskStatus.PENDING.value:
+                model.status = TaskStatus.CANCELLED.value
+                model.cancel_requested = True
+                model.finished_at = datetime.now(timezone.utc)
                 model.updated_at = datetime.now(timezone.utc)
                 session.commit()
                 session.refresh(model)
-                task = Task(model)
-                task._cancel_requested = self._cancel_requested.get(task_id, False)
-                return task
-            finally:
-                session.close()
+                return Task(model)
 
-    def add_log(self, task_id: str, message: str) -> None:
-        with self._lock:
-            session = self._session()
-            try:
-                model = session.query(TaskModel).filter(TaskModel.id == task_id).first()
-                if model:
-                    timestamp = datetime.now(timezone.utc).isoformat()
-                    new_logs = list(model.logs) if model.logs else []
-                    new_logs.append(f"[{timestamp}] {message}")
-                    model.logs = new_logs
-                    model.updated_at = datetime.now(timezone.utc)
-                    session.commit()
-            finally:
-                session.close()
-
-    def request_cancel(self, task_id: str) -> Optional[Task]:
-        with self._lock:
-            self._cancel_requested[task_id] = True
-            session = self._session()
-            try:
-                model = session.query(TaskModel).filter(TaskModel.id == task_id).first()
-                if not model:
-                    return None
-
-                if model.status in (
-                    TaskStatus.SUCCEEDED.value,
-                    TaskStatus.FAILED.value,
-                    TaskStatus.CANCELLED.value,
-                ):
-                    task = Task(model)
-                    task._cancel_requested = True
-                    return task
-
-                if model.status == TaskStatus.PENDING.value:
-                    model.status = TaskStatus.CANCELLED.value
-                    model.finished_at = datetime.now(timezone.utc)
-                    model.updated_at = datetime.now(timezone.utc)
-                    session.commit()
-                    session.refresh(model)
-
-                task = Task(model)
-                task._cancel_requested = True
-                return task
-            finally:
-                session.close()
+            model.cancel_requested = True
+            model.updated_at = datetime.now(timezone.utc)
+            session.commit()
+            session.refresh(model)
+            return Task(model)
+        finally:
+            session.close()

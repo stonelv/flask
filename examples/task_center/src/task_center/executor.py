@@ -104,22 +104,16 @@ class TaskExecutor:
         while self._running or not self._pending_queue.empty():
             try:
                 task_id = self._pending_queue.get(timeout=0.5)
-                task = self._storage.get(task_id)
-                if task and task.status == TaskStatus.PENDING:
-                    self._executor.submit(self._execute_task, task_id)
+                self._executor.submit(self._execute_task, task_id)
             except queue.Empty:
                 continue
             except Exception:
                 logger.exception("Error in dispatcher loop")
 
     def _execute_task(self, task_id: str) -> None:
-        task = self._storage.get(task_id)
+        task = self._storage.claim_for_execution(task_id)
         if not task:
-            logger.error(f"Task {task_id} not found")
-            return
-
-        if task.status != TaskStatus.PENDING:
-            logger.warning(f"Task {task_id} is not PENDING, skipping")
+            logger.info(f"Task {task_id} could not be claimed (already running or cancelled)")
             return
 
         handler = self._handlers.get(task.type)
@@ -133,16 +127,7 @@ class TaskExecutor:
             logger.error(f"No handler for task type: {task.type}")
             return
 
-        if task.is_cancelled():
-            self._storage.update(task_id, status=TaskStatus.CANCELLED)
-            return
-
-        self._storage.update(
-            task_id,
-            status=TaskStatus.RUNNING,
-            started_at=datetime.now(timezone.utc),
-        )
-        logger.info(f"Task {task_id} started", extra={"task_id": task_id})
+        logger.info(f"Task {task_id} claimed and started", extra={"task_id": task_id})
 
         ctx = TaskContext(task, self._storage, self)
 
