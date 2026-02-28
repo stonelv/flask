@@ -6,3 +6,5 @@ dist/
 htmlcov/
 .tox/
 docs/_build/
+.venv/
+examples/task_center/venv/
