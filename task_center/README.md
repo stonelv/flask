@@ -5,10 +5,11 @@
 ## 功能特性
 
 - **任务生命周期管理**: PENDING → RUNNING → SUCCEEDED/FAILED/CANCELLED
-- **幂等性控制**: 通过 `idempotency_key` 防止重复执行
+- **幂等性控制**: 通过 `idempotency_key` 防止重复执行，支持多进程并发安全
 - **进度追踪**: 实时进度上报 (0-100) 和阶段描述
 - **协作式取消**: 支持安全地取消运行中任务
-- **结构化日志**: 完整的任务执行日志记录
+- **结构化日志**: 完整的任务执行日志记录，包含固定字段（task_id, type, status, progress, stage, elapsed_ms）
+- **统一 API 响应**: 所有接口返回统一格式 `{code, message, data, request_id}`
 - **RESTful API**: 简洁的 HTTP 接口
 
 ## 项目结构
@@ -64,6 +65,33 @@ flask run --port 5000
 
 ## API 文档
 
+### 统一响应格式
+
+所有 API 响应都采用统一的 JSON 格式：
+
+```json
+{
+  "code": 0,              // 业务状态码，0 表示成功
+  "message": "success",   // 状态描述
+  "data": { ... },        // 业务数据（可选）
+  "request_id": "uuid"    // 请求追踪 ID
+}
+```
+
+### 错误码说明
+
+| 错误码 | HTTP 状态 | 说明 |
+|--------|-----------|------|
+| 0 | 200 | 成功 |
+| 400000 | 400 | 请求参数错误 |
+| 400001 | 400 | 参数验证失败 |
+| 400002 | 400 | 缺少必需参数 |
+| 400003 | 400 | 任务无法取消 |
+| 404001 | 404 | 任务不存在 |
+| 409001 | 409 | 幂等键冲突（返回已存在任务） |
+| 500000 | 500 | 服务器内部错误 |
+| 500001 | 500 | 数据库错误 |
+
 ### 健康检查
 
 ```http
@@ -73,8 +101,12 @@ GET /health
 **响应示例:**
 ```json
 {
-  "status": "healthy",
-  "timestamp": "2024-01-01T12:00:00"
+  "code": 0,
+  "message": "healthy",
+  "data": {
+    "timestamp": "2024-01-01T12:00:00"
+  },
+  "request_id": "uuid-string"
 }
 ```
 
@@ -97,30 +129,39 @@ Content-Type: application/json
 **响应示例:**
 ```json
 {
-  "task": {
-    "id": "uuid-string",
-    "type": "long_running_task",
-    "status": "RUNNING",
-    "progress": 0,
-    "stage": "初始化中...",
-    "payload": {"duration": 20, "items": 10},
-    "result": null,
-    "error": null,
-    "idempotency_key": "unique_key_123",
-    "created_at": "2024-01-01T12:00:00",
-    "updated_at": "2024-01-01T12:00:00",
-    "started_at": "2024-01-01T12:00:00",
-    "completed_at": null,
-    "cancelled_at": null,
-    "logs": []
+  "code": 0,
+  "message": "Task created successfully",
+  "data": {
+    "task": {
+      "id": "uuid-string",
+      "type": "long_running_task",
+      "status": "RUNNING",
+      "progress": 0,
+      "stage": "初始化中...",
+      "payload": {"duration": 20, "items": 10},
+      "result": null,
+      "error": null,
+      "idempotency_key": "unique_key_123",
+      "created_at": "2024-01-01T12:00:00",
+      "updated_at": "2024-01-01T12:00:00",
+      "started_at": "2024-01-01T12:00:00",
+      "completed_at": null,
+      "cancelled_at": null
+    },
+    "is_new": true
   },
-  "is_new": true
+  "request_id": "uuid-string"
 }
 ```
 
 **状态码:**
 - `201 Created`: 新任务创建成功
 - `200 OK`: 返回已存在的任务（幂等）
+
+**幂等性保证:**
+- 使用 `idempotency_key` 确保同一业务操作不会重复执行
+- 多进程并发场景下也能保证幂等（使用数据库唯一约束）
+- 重复请求返回已存在的任务，不会再次触发执行
 
 ### 获取任务列表
 
@@ -137,13 +178,18 @@ GET /api/tasks?status=RUNNING&type=long_running_task&limit=20&offset=0
 **响应示例:**
 ```json
 {
-  "tasks": [...],
-  "pagination": {
-    "total": 100,
-    "limit": 20,
-    "offset": 0,
-    "has_more": true
-  }
+  "code": 0,
+  "message": "success",
+  "data": {
+    "tasks": [...],
+    "pagination": {
+      "total": 100,
+      "limit": 20,
+      "offset": 0,
+      "has_more": true
+    }
+  },
+  "request_id": "uuid-string"
 }
 ```
 
@@ -156,24 +202,22 @@ GET /api/tasks/{task_id}
 **响应示例:**
 ```json
 {
-  "task": {
-    "id": "uuid-string",
-    "status": "SUCCEEDED",
-    "progress": 100,
-    "stage": "任务完成",
-    "result": {
-      "processed_items": 10,
-      "duration": 20,
-      "summary": "Successfully processed 10 items in 20 seconds"
-    },
-    "logs": [
-      {
-        "timestamp": "2024-01-01T12:00:01",
-        "level": "INFO",
-        "message": "Task started"
+  "code": 0,
+  "message": "success",
+  "data": {
+    "task": {
+      "id": "uuid-string",
+      "status": "SUCCEEDED",
+      "progress": 100,
+      "stage": "任务完成",
+      "result": {
+        "processed_items": 10,
+        "duration": 20,
+        "summary": "Successfully processed 10 items in 20 seconds"
       }
-    ]
-  }
+    }
+  },
+  "request_id": "uuid-string"
 }
 ```
 
@@ -186,14 +230,69 @@ POST /api/tasks/{task_id}/cancel
 **响应示例:**
 ```json
 {
-  "message": "Task cancelled",
-  "task": {
-    "id": "uuid-string",
-    "status": "CANCELLED",
-    ...
-  }
+  "code": 0,
+  "message": "Task cancelled successfully",
+  "data": {
+    "task": {
+      "id": "uuid-string",
+      "status": "CANCELLED",
+      ...
+    }
+  },
+  "request_id": "uuid-string"
 }
 ```
+
+### 获取任务结构化日志
+
+```http
+GET /api/tasks/{task_id}/logs
+```
+
+**响应示例:**
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "task_id": "uuid-string",
+    "type": "long_running_task",
+    "status": "SUCCEEDED",
+    "progress": 100,
+    "stage": "任务完成",
+    "elapsed_ms": 20500,
+    "logs": [
+      {
+        "timestamp": "2024-01-01T12:00:01",
+        "level": "INFO",
+        "message": "Task started"
+      },
+      {
+        "timestamp": "2024-01-01T12:00:05",
+        "level": "INFO",
+        "message": "Processing...",
+        "progress": 50
+      },
+      {
+        "timestamp": "2024-01-01T12:00:20",
+        "level": "INFO",
+        "message": "Task completed",
+        "progress": 100
+      }
+    ]
+  },
+  "request_id": "uuid-string"
+}
+```
+
+**结构化日志字段说明:**
+- `task_id`: 任务唯一标识
+- `type`: 任务类型
+- `status`: 当前任务状态
+- `progress`: 当前进度 (0-100)
+- `stage`: 当前阶段描述
+- `elapsed_ms`: 执行耗时（毫秒）
+- `logs`: 日志条目列表，每条包含 `timestamp`, `level`, `message` 等字段
 
 ## 内置任务类型
 
@@ -275,7 +374,10 @@ curl -X POST http://localhost:5000/api/tasks \
 # 2. 查询任务状态
 curl http://localhost:5000/api/tasks/{task_id}
 
-# 3. 取消任务
+# 3. 获取任务结构化日志
+curl http://localhost:5000/api/tasks/{task_id}/logs
+
+# 4. 取消任务
 curl -X POST http://localhost:5000/api/tasks/{task_id}/cancel
 ```
 
@@ -291,18 +393,34 @@ response = requests.post("http://localhost:5000/api/tasks", json={
     "payload": {"duration": 20, "items": 10},
     "idempotency_key": "operation-123"
 })
-task = response.json()["task"]
+data = response.json()
+if data["code"] != 0:
+    print(f"Error: {data['message']}")
+    exit(1)
+
+task = data["data"]["task"]
+print(f"Task created: {task['id']}, is_new: {data['data']['is_new']}")
 
 # 轮询任务状态
 while task["status"] in ["PENDING", "RUNNING"]:
     time.sleep(1)
     response = requests.get(f"http://localhost:5000/api/tasks/{task['id']}")
-    task = response.json()["task"]
-    print(f"Progress: {task['progress']}%, Stage: {task['stage']}")
+    result = response.json()
+    if result["code"] == 0:
+        task = result["data"]["task"]
+        print(f"Progress: {task['progress']}%, Stage: {task['stage']}")
 
 print(f"Final status: {task['status']}")
-if task["result"]:
+if task.get("result"):
     print(f"Result: {task['result']}")
+
+# 获取结构化日志
+response = requests.get(f"http://localhost:5000/api/tasks/{task['id']}/logs")
+log_data = response.json()
+if log_data["code"] == 0:
+    print(f"Execution time: {log_data['data']['elapsed_ms']}ms")
+    for log in log_data["data"]["logs"]:
+        print(f"[{log['level']}] {log['timestamp']}: {log['message']}")
 ```
 
 ## 幂等性说明
@@ -311,12 +429,19 @@ if task["result"]:
 
 1. **首次请求**: 创建新任务并返回 `is_new: true`
 2. **重复请求**: 返回已存在的任务并返回 `is_new: false`
-3. **并发安全**: 使用锁机制确保同 key 的并发请求不会创建重复任务
+3. **并发安全**: 使用数据库唯一约束确保多进程/多线程场景下同 key 不会创建重复任务
+4. **不重复执行**: 重复请求不会再次触发任务执行，保证业务安全
+
+**实现机制:**
+- 数据库层：使用 SQLite 唯一索引约束 `idempotency_key`
+- 原子操作：使用 `INSERT` 尝试插入，冲突时回读已有任务
+- 进程安全：不依赖进程内锁，支持多进程部署
 
 **最佳实践:**
 - 为每个业务操作生成唯一的幂等键（如 `order_123_payment`）
 - 幂等键应包含业务标识，便于追踪
 - 已完成的任务也会返回，可用于查询历史状态
+- 幂等键建议包含时间戳或版本号，避免长期冲突
 
 ## 架构说明
 

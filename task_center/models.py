@@ -198,7 +198,51 @@ class TaskRepository:
                 ))
             conn.commit()
         return task
-    
+
+    def insert_or_none(self, task: Task) -> bool:
+        """
+        尝试插入新任务，如果幂等键冲突则返回 False
+
+        使用 DB 原子语义实现多进程并发安全：
+        - 插入成功返回 True
+        - 唯一键冲突返回 False（不抛出异常）
+
+        Args:
+            task: 要插入的任务
+
+        Returns:
+            是否插入成功
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute("""
+                    INSERT INTO tasks
+                    (id, type, status, progress, stage, payload, result, error,
+                     idempotency_key, created_at, updated_at, started_at, completed_at, cancelled_at, logs)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    task.id,
+                    task.type,
+                    task.status.value,
+                    task.progress,
+                    task.stage,
+                    json.dumps(task.payload),
+                    json.dumps(task.result) if task.result else None,
+                    task.error,
+                    task.idempotency_key,
+                    task.created_at.isoformat() if task.created_at else datetime.now().isoformat(),
+                    task.updated_at.isoformat() if task.updated_at else datetime.now().isoformat(),
+                    task.started_at.isoformat() if task.started_at else None,
+                    task.completed_at.isoformat() if task.completed_at else None,
+                    task.cancelled_at.isoformat() if task.cancelled_at else None,
+                    json.dumps(task.logs)
+                ))
+                conn.commit()
+                return True
+        except sqlite3.IntegrityError:
+            # 唯一键冲突（幂等键已存在）
+            return False
+
     def get_by_id(self, task_id: str) -> Optional[Task]:
         """根据ID获取任务"""
         import sqlite3

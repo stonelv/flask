@@ -96,14 +96,39 @@ class CancellableTaskHandler(TaskHandler):
 
 class FailingTaskHandler(TaskHandler):
     """失败任务处理器 - 用于测试错误处理"""
-    
+
     @property
     def task_type(self) -> str:
         return "failing_task"
-    
+
     def execute(self, context: TaskContext, payload: dict) -> dict:
         error_message = payload.get("error", "Task failed as requested")
         raise RuntimeError(error_message)
+
+
+class LongRunningTaskHandler(TaskHandler):
+    """长时间运行任务处理器 - 用于测试幂等性"""
+
+    @property
+    def task_type(self) -> str:
+        return "long_running_task"
+
+    def execute(self, context: TaskContext, payload: dict) -> dict:
+        import time
+        duration = payload.get("duration", 10)
+        steps = payload.get("steps", 10)
+        step_duration = duration / steps
+
+        context.info(f"Long running task started, duration={duration}s")
+
+        for i in range(steps):
+            context.check_cancelled()
+            progress = (i + 1) * 100 // steps
+            context.set_progress(progress, f"Processing step {i+1}/{steps}")
+            time.sleep(step_duration)
+
+        context.info("Long running task completed")
+        return {"duration": duration, "steps": steps}
 
 
 @pytest.fixture
@@ -113,5 +138,6 @@ def executor_with_handlers(repository):
     exec.register_handler(QuickTaskHandler())
     exec.register_handler(CancellableTaskHandler())
     exec.register_handler(FailingTaskHandler())
+    exec.register_handler(LongRunningTaskHandler())
     yield exec
     exec.shutdown(wait=False)
