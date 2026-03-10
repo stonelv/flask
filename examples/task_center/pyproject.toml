@@ -1,0 +1,36 @@
+[project]
+name = "task-center"
+version = "0.1.0"
+description = "A background task center for Flask applications"
+authors = [
+    { name = "Task Center Team", email = "team@example.com" }
+]
+requires-python = ">=3.10"
+dependencies = [
+    "flask>=3.0.0",
+    "flask-sqlalchemy>=3.0.0",
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.1.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.ruff]
+line-length = 88
+select = ["E", "F", "I", "B"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+force-single-line = true
