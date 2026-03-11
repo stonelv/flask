@@ -1,0 +1,11 @@
+Metadata-Version: 2.4
+Name: task_center
+Version: 0.1.0
+Summary: A reusable async task center for Flask applications
+Author-email: Flask Task Center <task-center@example.com>
+Requires-Dist: flask>=3.0.0
+Requires-Dist: sqlalchemy>=2.0.0
+Requires-Dist: flask-sqlalchemy>=3.1.0
+Requires-Dist: python-json-logger>=2.0.0
+Requires-Dist: pytest>=7.0.0
+Requires-Dist: pytest-asyncio>=0.21.0
