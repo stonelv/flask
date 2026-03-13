@@ -38,6 +38,7 @@ class Task(Base):
     updated_at = Column(DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
     started_at = Column(DateTime)
     completed_at = Column(DateTime)
+    cancelled_at = Column(DateTime)
 
     def to_dict(self):
         return {
@@ -54,6 +55,7 @@ class Task(Base):
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "cancelled_at": self.cancelled_at.isoformat() if self.cancelled_at else None,
         }
 
 

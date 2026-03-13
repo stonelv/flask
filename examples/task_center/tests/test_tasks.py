@@ -31,7 +31,9 @@ class TestIdempotency:
             "payload": {"data": "test1"}
         })
         assert response1.status_code == 201
-        task1 = response1.get_json()
+        result1 = response1.get_json()
+        assert result1["error"] is None
+        task1 = result1["data"]
 
         # Second request with same key
         response2 = client.post("/api/tasks", json={
@@ -40,7 +42,9 @@ class TestIdempotency:
             "payload": {"data": "test2"}
         })
         assert response2.status_code == 200
-        task2 = response2.get_json()
+        result2 = response2.get_json()
+        assert result2["error"] is None
+        task2 = result2["data"]
 
         # Should return same task
         assert task1["id"] == task2["id"]
@@ -59,7 +63,11 @@ class TestIdempotency:
 
         assert response1.status_code == 201
         assert response2.status_code == 201
-        assert response1.get_json()["id"] != response2.get_json()["id"]
+        result1 = response1.get_json()
+        result2 = response2.get_json()
+        assert result1["error"] is None
+        assert result2["error"] is None
+        assert result1["data"]["id"] != result2["data"]["id"]
 
     def test_create_task_no_idempotency_key(self, client):
         """Test creating task without idempotency key"""
@@ -67,7 +75,9 @@ class TestIdempotency:
             "type": "example_long_task",
         })
         assert response.status_code == 201
-        task = response.get_json()
+        result = response.get_json()
+        assert result["error"] is None
+        task = result["data"]
         assert task["idempotency_key"] is None
 
 
@@ -80,17 +90,23 @@ class TestTaskCRUD:
             "type": "example_long_task",
         })
         assert response.status_code == 201
-        task = response.get_json()
+        result = response.get_json()
+        assert result["error"] is None
+        task = result["data"]
 
         response = client.get(f"/api/tasks/{task['id']}")
         assert response.status_code == 200
-        fetched = response.get_json()
+        result = response.get_json()
+        assert result["error"] is None
+        fetched = result["data"]
         assert fetched["id"] == task["id"]
 
     def test_get_task_not_found(self, client):
         """Test getting non-existent task"""
         response = client.get("/api/tasks/non-existent-id")
         assert response.status_code == 404
+        result = response.get_json()
+        assert result["error"] == "Task not found"
 
     def test_list_tasks(self, client):
         """Test listing tasks"""
@@ -103,7 +119,9 @@ class TestTaskCRUD:
 
         response = client.get("/api/tasks")
         assert response.status_code == 200
-        data = response.get_json()
+        result = response.get_json()
+        assert result["error"] is None
+        data = result["data"]
         assert data["total"] >= 5
         assert len(data["items"]) == min(5, data["per_page"])
 
@@ -116,7 +134,9 @@ class TestTaskCRUD:
 
         response = client.get("/api/tasks?type=example_long_task")
         assert response.status_code == 200
-        data = response.get_json()
+        result = response.get_json()
+        assert result["error"] is None
+        data = result["data"]
         for task in data["items"]:
             assert task["type"] == "example_long_task"
 
@@ -130,7 +150,9 @@ class TestTaskCRUD:
 
         response = client.get("/api/tasks?page=2&per_page=10")
         assert response.status_code == 200
-        data = response.get_json()
+        result = response.get_json()
+        assert result["error"] is None
+        data = result["data"]
         assert data["page"] == 2
         assert len(data["items"]) == 10
 
@@ -143,14 +165,20 @@ class TestTaskCancellation:
         response = client.post("/api/tasks", json={
             "type": "example_long_task",
         })
-        task = response.get_json()
+        assert response.status_code == 201
+        result = response.get_json()
+        assert result["error"] is None
+        task = result["data"]
 
         response = client.post(f"/api/tasks/{task['id']}/cancel")
         assert response.status_code == 200
+        result = response.get_json()
+        assert result["error"] is None
 
         # Verify status
         response = client.get(f"/api/tasks/{task['id']}")
-        assert response.get_json()["status"] == "CANCELLED"
+        result = response.get_json()
+        assert result["data"]["status"] == "CANCELLED"
 
     def test_cancel_completed_task(self, client):
         """Test cancelling a completed task fails"""
@@ -158,7 +186,10 @@ class TestTaskCancellation:
         response = client.post("/api/tasks", json={
             "type": "example_long_task",
         })
-        task = response.get_json()
+        assert response.status_code == 201
+        result = response.get_json()
+        assert result["error"] is None
+        task = result["data"]
 
         db_task = db_session.get(Task, task["id"])
         db_task.status = TaskStatus.SUCCEEDED
@@ -166,11 +197,15 @@ class TestTaskCancellation:
 
         response = client.post(f"/api/tasks/{task['id']}/cancel")
         assert response.status_code == 400
+        result = response.get_json()
+        assert result["error"] is not None
 
     def test_cancel_nonexistent_task(self, client):
         """Test cancelling non-existent task"""
         response = client.post("/api/tasks/non-existent/cancel")
         assert response.status_code == 404
+        result = response.get_json()
+        assert result["error"] == "Task not found"
 
 
 class TestTaskStatus:
@@ -207,20 +242,25 @@ class TestTaskStatus:
             "idempotency_key": "execute-test-1",
         })
         assert response.status_code == 201
-        task = response.get_json()
+        result = response.get_json()
+        assert result["error"] is None
+        task = result["data"]
         task_id = task["id"]
 
         # Wait for task to complete (max 5 seconds)
+        task_data = None
         for i in range(50):
             response = client.get(f"/api/tasks/{task_id}")
-            task_data = response.get_json()
+            result = response.get_json()
+            task_data = result["data"]
             if task_data["status"] in ["SUCCEEDED", "FAILED", "CANCELLED"]:
                 break
             time.sleep(0.1)
 
         # Verify the task completed
         response = client.get(f"/api/tasks/{task_id}")
-        task_data = response.get_json()
+        result = response.get_json()
+        task_data = result["data"]
         
         # Check that the task succeeded
         assert task_data["status"] == "SUCCEEDED", f"Task failed with status: {task_data['status']}, error: {task_data['error']}"
@@ -234,7 +274,10 @@ class TestTaskStatus:
         response = client.post("/api/tasks", json={
             "type": "example_long_task",
         })
-        task = response.get_json()
+        assert response.status_code == 201
+        result = response.get_json()
+        assert result["error"] is None
+        task = result["data"]
         assert task["status"] == "PENDING"
         assert task["progress"] == 0
 
@@ -248,6 +291,8 @@ class TestTaskValidation:
             "type": "non_existent_type",
         })
         assert response.status_code == 400
+        result = response.get_json()
+        assert result["message"] is not None  # Error in message field
 
     def test_create_task_missing_type(self, client):
         """Test creating task without type"""
@@ -255,8 +300,188 @@ class TestTaskValidation:
             "payload": {"test": "data"},
         })
         assert response.status_code == 400
+        result = response.get_json()
+        assert result["message"] is not None
 
     def test_invalid_status_filter(self, client):
         """Test filtering with invalid status"""
         response = client.get("/api/tasks?status=INVALID_STATUS")
         assert response.status_code == 400
+        result = response.get_json()
+        assert result["error"] is not None
+
+
+# Test counter for idempotency test
+_execution_counter = {}
+
+
+class TestConcurrentIdempotency:
+    """Test concurrent idempotent task creation - database atomic guarantee"""
+
+    def test_concurrent_requests_same_idempotency_key(self, app):
+        """Test that concurrent POST requests with same idempotency_key only create one task
+        
+        This tests the database-level atomic guarantee: insert first, then handle unique conflict.
+        Uses an execution counter to prove the task only executes once.
+        """
+        import threading
+        import time
+        from task_center.executor import register_task_type, _task_registry
+        
+        global _execution_counter
+        test_key = "concurrent-idempotency-test-key"
+        _execution_counter[test_key] = 0
+        
+        # Create a tracking task that increments a counter when executed
+        async def tracked_task(payload, progress_callback, cancel_event):
+            global _execution_counter
+            _execution_counter[test_key] += 1
+            await asyncio.sleep(0.2)  # Simulate work
+            return {"counter": _execution_counter[test_key]}
+        
+        # Register the test task type
+        register_task_type("tracked_test", tracked_task)
+        
+        # Number of concurrent threads
+        NUM_THREADS = 20
+        results = []
+        errors = []
+        
+        def make_request():
+            try:
+                with app.test_client() as client:
+                    response = client.post("/api/tasks", json={
+                        "type": "tracked_test",
+                        "idempotency_key": test_key,
+                        "payload": {"thread": threading.get_ident()}
+                    })
+                    results.append((response.status_code, response.get_json()))
+            except Exception as e:
+                errors.append(str(e))
+        
+        # Start all threads at roughly the same time
+        threads = [threading.Thread(target=make_request) for _ in range(NUM_THREADS)]
+        
+        # Start all threads
+        for thread in threads:
+            thread.start()
+        
+        # Wait for all threads to complete
+        for thread in threads:
+            thread.join(timeout=10)
+        
+        # Verify no errors
+        assert len(errors) == 0, f"Errors occurred: {errors}"
+        
+        # Collect all task IDs returned
+        task_ids = []
+        for status, data in results:
+            assert status in [200, 201], f"Unexpected status {status}: {data}"
+            assert data["error"] is None
+            task_ids.append(data["data"]["id"])
+        
+        # All requests should return the SAME task ID
+        unique_task_ids = set(task_ids)
+        assert len(unique_task_ids) == 1, \
+            f"Expected 1 unique task ID, got {len(unique_task_ids)}: {unique_task_ids}"
+        
+        # Verify only one task in database with this idempotency_key
+        from task_center.database import Task, db_session
+        tasks = db_session.query(Task).filter_by(idempotency_key=test_key).all()
+        assert len(tasks) == 1, f"Expected 1 task in DB, got {len(tasks)}"
+        
+        # Wait for task to execute and verify it only ran ONCE
+        time.sleep(1.0)  # Give time for task to complete
+        assert _execution_counter[test_key] == 1, \
+            f"Task should execute exactly once, but executed {_execution_counter[test_key]} times"
+        
+        # Cleanup
+        del _execution_counter[test_key]
+        if "tracked_test" in _task_registry:
+            del _task_registry["tracked_test"]
+
+
+class TestCancelStateConsistency:
+    """Test that CANCELLED state is preserved and not overwritten"""
+
+    def test_cancelled_task_stays_cancelled(self, client):
+        """Test that once cancelled, a task cannot be changed to SUCCEEDED/FAILED"""
+        import time
+        
+        # Create a task
+        response = client.post("/api/tasks", json={
+            "type": "example_long_task",
+        })
+        assert response.status_code == 201
+        result = response.get_json()
+        task_id = result["data"]["id"]
+        
+        # Give it a moment to start
+        time.sleep(0.1)
+        
+        # Cancel the task
+        response = client.post(f"/api/tasks/{task_id}/cancel")
+        assert response.status_code == 200
+        
+        # Verify cancelled state
+        response = client.get(f"/api/tasks/{task_id}")
+        result = response.get_json()
+        assert result["data"]["status"] == "CANCELLED"
+        assert result["data"]["cancelled_at"] is not None
+        
+        # Wait and verify status remains CANCELLED
+        time.sleep(2.0)
+        response = client.get(f"/api/tasks/{task_id}")
+        result = response.get_json()
+        
+        # The task must stay CANCELLED - this is the key assertion
+        assert result["data"]["status"] == "CANCELLED", \
+            f"Task status changed from CANCELLED to {result['data']['status']}"
+        assert result["data"]["cancelled_at"] is not None
+        
+        # Verify result/error are not set (or error indicates cancellation)
+        if result["data"]["error"]:
+            assert "cancelled" in result["data"]["error"].lower()
+
+    def test_cancel_before_execution_preserves_state(self, client):
+        """Test cancelling a task before it starts preserves CANCELLED state"""
+        import time
+        from task_center.executor import register_task_type, _task_registry
+        
+        # Create a task that signals when it starts
+        started_event = []
+        
+        async def signal_task(payload, progress_callback, cancel_event):
+            started_event.append(True)
+            await asyncio.sleep(1.0)
+            return {"done": True}
+        
+        register_task_type("signal_test", signal_task)
+        
+        # Create and immediately cancel
+        response = client.post("/api/tasks", json={
+            "type": "signal_test",
+        })
+        assert response.status_code == 201
+        result = response.get_json()
+        assert result["error"] is None
+        task_id = result["data"]["id"]
+        
+        # Cancel immediately (before execution starts)
+        response = client.post(f"/api/tasks/{task_id}/cancel")
+        assert response.status_code == 200
+        result = response.get_json()
+        assert result["error"] is None
+        
+        # Wait and check
+        time.sleep(0.5)
+        response = client.get(f"/api/tasks/{task_id}")
+        result = response.get_json()
+        
+        # Task should remain CANCELLED
+        assert result["data"]["status"] == "CANCELLED"
+        assert result["data"]["cancelled_at"] is not None
+        
+        # Cleanup
+        if "signal_test" in _task_registry:
+            del _task_registry["signal_test"]

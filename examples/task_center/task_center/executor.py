@@ -63,24 +63,39 @@ class TaskExecutor:
         try:
             from .database import Task, TaskStatus
 
-            # Mark task as RUNNING
+            # Mark task as RUNNING - atomic update to prevent race conditions
+            # Only update if status is still PENDING (not CANCELLED or RUNNING)
             session = self._get_session()
-            task = session.get(Task, task_id)
-            if not task:
-                logger.error(f"Task {task_id} not found")
-                return
-
-            if task.status == TaskStatus.CANCELLED:
-                logger.info(f"Task {task_id} is already cancelled")
+            
+            # Use atomic UPDATE ... WHERE to mark task as RUNNING
+            update_count = session.query(Task).filter(
+                Task.id == task_id,
+                Task.status == TaskStatus.PENDING
+            ).update({
+                Task.status: TaskStatus.RUNNING,
+                Task.started_at: datetime.now(UTC)
+            }, synchronize_session=False)
+            
+            session.commit()
+            
+            if update_count == 0:
+                # Task was either not found or already in another state
+                task = session.get(Task, task_id)
+                if not task:
+                    logger.error(f"Task {task_id} not found", extra={"task_id": task_id})
+                elif task.status == TaskStatus.CANCELLED:
+                    logger.info(f"Task {task_id} is already cancelled, skipping execution", 
+                               extra={"task_id": task_id})
+                else:
+                    logger.info(f"Task {task_id} is already in state {task.status}, skipping", 
+                               extra={"task_id": task_id, "status": task.status})
                 session.close()
                 return
-
-            task.status = TaskStatus.RUNNING
-            task.started_at = datetime.now(UTC)
-            session.commit()
+            
             session.close()
 
-            logger.info(f"Starting task {task_id}")
+            logger.info(f"Starting task {task_id}", 
+                       extra={"task_id": task_id, "stage": "starting", "progress": 0})
 
             async def progress_callback(progress: int, stage: str):
                 if cancel_event.is_set():
@@ -92,39 +107,78 @@ class TaskExecutor:
                 # Get payload from a fresh session
                 session = self._get_session()
                 task = session.get(Task, task_id)
+                if task.status == TaskStatus.CANCELLED:
+                    logger.info(f"Task {task_id} was already cancelled before execution")
+                    session.close()
+                    return
                 payload = task.payload
                 session.close()
 
                 result = await task_func(payload, progress_callback, cancel_event)
                 
-                # Update task with result
+                # Update task with result - atomic update to prevent race conditions
+                # Only mark as SUCCEEDED if still in RUNNING state
                 session = self._get_session()
-                task = session.get(Task, task_id)
-                task.status = TaskStatus.SUCCEEDED
-                task.result = result
-                task.progress = 100
-                task.stage = "completed"
-                task.completed_at = datetime.now(UTC)
+                update_count = session.query(Task).filter(
+                    Task.id == task_id,
+                    Task.status == TaskStatus.RUNNING
+                ).update({
+                    Task.status: TaskStatus.SUCCEEDED,
+                    Task.result: result,
+                    Task.progress: 100,
+                    Task.stage: "completed",
+                    Task.completed_at: datetime.now(UTC)
+                }, synchronize_session=False)
+                
                 session.commit()
+                
+                if update_count > 0:
+                    logger.info(f"Task {task_id} succeeded", 
+                               extra={"task_id": task_id, "stage": "completed", "progress": 100})
+                else:
+                    task = session.get(Task, task_id)
+                    if task:
+                        logger.info(f"Task {task_id} not marked as succeeded - current state: {task.status}",
+                                   extra={"task_id": task_id, "status": task.status})
                 session.close()
             except TaskCancelledError:
+                # Task was cancelled cooperatively - atomic update
                 session = self._get_session()
-                task = session.get(Task, task_id)
-                task.status = TaskStatus.CANCELLED
-                task.error = "Task was cancelled"
-                task.completed_at = datetime.now(UTC)
+                update_count = session.query(Task).filter(
+                    Task.id == task_id,
+                    Task.status.not_in([TaskStatus.SUCCEEDED, TaskStatus.FAILED, TaskStatus.CANCELLED])
+                ).update({
+                    Task.status: TaskStatus.CANCELLED,
+                    Task.error: "Task was cancelled",
+                    Task.cancelled_at: datetime.now(UTC)
+                }, synchronize_session=False)
+                
                 session.commit()
+                
+                if update_count > 0:
+                    task = session.get(Task, task_id)
+                    logger.info(f"Task {task_id} was cancelled cooperatively",
+                               extra={"task_id": task_id, "stage": task.stage, "progress": task.progress})
                 session.close()
-                logger.info(f"Task {task_id} was cancelled")
             except Exception as e:
+                # Task failed - atomic update to prevent race conditions
                 session = self._get_session()
-                task = session.get(Task, task_id)
-                task.status = TaskStatus.FAILED
-                task.error = str(e)
-                task.completed_at = datetime.now(UTC)
+                update_count = session.query(Task).filter(
+                    Task.id == task_id,
+                    Task.status.not_in([TaskStatus.SUCCEEDED, TaskStatus.FAILED, TaskStatus.CANCELLED])
+                ).update({
+                    Task.status: TaskStatus.FAILED,
+                    Task.error: str(e),
+                    Task.completed_at: datetime.now(UTC)
+                }, synchronize_session=False)
+                
                 session.commit()
+                
+                if update_count > 0:
+                    task = session.get(Task, task_id)
+                    logger.exception(f"Task {task_id} failed",
+                                    extra={"task_id": task_id, "stage": task.stage, "progress": task.progress})
                 session.close()
-                logger.exception(f"Task {task_id} failed")
 
             logger.info(f"Task {task_id} completed")
 
@@ -138,20 +192,29 @@ class TaskExecutor:
             self._cancel_events.pop(task_id, None)
 
     def update_progress(self, task_id: str, progress: int, stage: str):
-        """Update task progress"""
+        """Update task progress - atomic update"""
         session = None
         try:
             from .database import Task, TaskStatus
             session = self._get_session()
-            task = session.get(Task, task_id)
-            if task and task.status not in [TaskStatus.SUCCEEDED, TaskStatus.FAILED, TaskStatus.CANCELLED]:
-                task.progress = max(0, min(100, progress))
-                task.stage = stage
-                task.updated_at = datetime.now(UTC)
-                session.commit()
-                logger.debug(f"Task {task_id} progress: {progress}% - {stage}")
+            # Only update if task is still running
+            update_count = session.query(Task).filter(
+                Task.id == task_id,
+                Task.status == TaskStatus.RUNNING
+            ).update({
+                Task.progress: max(0, min(100, progress)),
+                Task.stage: stage,
+                Task.updated_at: datetime.now(UTC)
+            }, synchronize_session=False)
+            
+            session.commit()
+            
+            if update_count > 0:
+                logger.debug(f"Task {task_id} progress: {progress}% - {stage}",
+                            extra={"task_id": task_id, "stage": stage, "progress": progress})
         except Exception as e:
-            logger.exception(f"Failed to update progress for task {task_id}")
+            logger.exception(f"Failed to update progress for task {task_id}",
+                            extra={"task_id": task_id, "stage": stage, "progress": progress})
             if session:
                 session.rollback()
         finally:
@@ -164,24 +227,45 @@ class TaskExecutor:
         try:
             from .database import Task, TaskStatus
             session = self._get_session()
-            task = session.get(Task, task_id)
-            if not task:
+            
+            # Atomic update: only cancel if task is in PENDING or RUNNING state
+            update_count = session.query(Task).filter(
+                Task.id == task_id,
+                Task.status.in_([TaskStatus.PENDING, TaskStatus.RUNNING])
+            ).update({
+                Task.status: TaskStatus.CANCELLED,
+                Task.cancelled_at: datetime.now(UTC)
+            }, synchronize_session=False)
+            
+            session.commit()
+            
+            if update_count == 0:
+                # Check if task exists at all
+                task = session.get(Task, task_id)
+                if not task:
+                    logger.warning(f"Cannot cancel non-existent task {task_id}")
+                    session.close()
+                    return False
+                logger.info(f"Task {task_id} is already in state {task.status}, cannot cancel",
+                           extra={"task_id": task_id, "status": task.status})
+                session.close()
                 return False
 
-            if task.status not in [TaskStatus.PENDING, TaskStatus.RUNNING]:
-                return False
-
+            # Set cancel event for running tasks
             if task_id in self._cancel_events:
                 async def set_cancel():
                     self._cancel_events[task_id].set()
                 asyncio.run_coroutine_threadsafe(set_cancel(), self._loop)
 
-            task.status = TaskStatus.CANCELLED
-            task.completed_at = datetime.now(UTC)
-            session.commit()
+            # Get the task to log stage and progress
+            task = session.get(Task, task_id)
+            logger.info(f"Task {task_id} cancellation requested",
+                       extra={"task_id": task_id, "stage": task.stage, "progress": task.progress})
+            session.close()
             return True
         except Exception as e:
-            logger.exception(f"Failed to cancel task {task_id}")
+            logger.exception(f"Failed to cancel task {task_id}",
+                            extra={"task_id": task_id})
             if session:
                 session.rollback()
             return False
