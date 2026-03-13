@@ -1,6 +1,6 @@
 import enum
 import json
-from datetime import datetime
+from datetime import datetime, UTC
 from task_center.extensions import db
 
 class TaskStatus(enum.Enum):
@@ -22,7 +22,7 @@ class Task(db.Model):
     error = db.Column(db.Text)
     idempotency_key = db.Column(db.String(64), unique=True)
     timeout = db.Column(db.Integer, default=300)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     started_at = db.Column(db.DateTime)
     completed_at = db.Column(db.DateTime)
     cancelled_at = db.Column(db.DateTime)

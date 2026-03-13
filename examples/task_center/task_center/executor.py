@@ -2,7 +2,7 @@ import uuid
 import threading
 import time
 import random
-from datetime import datetime
+from datetime import datetime, UTC
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Callable, Any
 from flask import Flask
@@ -14,6 +14,8 @@ class TaskContext:
         self._cancelled = False
         self._lock = threading.Lock()
         self._app = app
+        self._current_stage = None
+        self._current_progress = 0
     
     def is_cancelled(self) -> bool:
         with self._lock:
@@ -26,6 +28,10 @@ class TaskContext:
     def update_progress(self, progress: int, stage: str = None):
         if progress < 0 or progress > 100:
             raise ValueError("Progress must be between 0 and 100")
+        
+        self._current_progress = progress
+        if stage:
+            self._current_stage = stage
         
         if not self._app:
             from task_center import create_app
@@ -49,7 +55,12 @@ class TaskContext:
         
         with self._app.app_context():
             log_level = getattr(logging, level.upper(), logging.INFO)
-            self._app.logger.log(log_level, f"[Task {self.task_id}] {message}")
+            extra = {
+                'task_id': self.task_id,
+                'stage': self._current_stage,
+                'progress': self._current_progress
+            }
+            self._app.logger.log(log_level, message, extra=extra)
 
 class TaskExecutor:
     def __init__(self):
@@ -92,18 +103,18 @@ class TaskExecutor:
             from task_center import db
             task = Task.query.get(task_id)
             if not task:
-                app.logger.error(f"Task {task_id} not found")
+                app.logger.error(f"Task {task_id} not found", extra={'task_id': task_id})
                 return
             
             if task.status == TaskStatus.CANCELLED:
-                app.logger.info(f"Task {task_id} was cancelled before starting")
+                app.logger.info(f"Task {task_id} was cancelled before starting", extra={'task_id': task_id})
                 return
             
             task.status = TaskStatus.RUNNING
-            task.started_at = datetime.utcnow()
+            task.started_at = datetime.now(UTC)
             db.session.commit()
             
-            app.logger.info(f"Starting task {task_id} of type {task_type}")
+            app.logger.info(f"Starting task {task_id} of type {task_type}", extra={'task_id': task_id})
         
         try:
             handler = self._task_handlers[task_type]
@@ -116,19 +127,19 @@ class TaskExecutor:
                     if result and isinstance(result, dict) and result.get('cancelled'):
                         if task.status != TaskStatus.CANCELLED:
                             task.status = TaskStatus.CANCELLED
-                            task.cancelled_at = datetime.utcnow()
+                            task.cancelled_at = datetime.now(UTC)
                             task.set_result(result)
                             db.session.commit()
-                        app.logger.info(f"Task {task_id} was cancelled during execution")
+                        app.logger.info(f"Task {task_id} was cancelled during execution", extra={'task_id': task_id})
                     elif task.status == TaskStatus.CANCELLED:
-                        app.logger.info(f"Task {task_id} was cancelled during execution")
+                        app.logger.info(f"Task {task_id} was cancelled during execution", extra={'task_id': task_id})
                     else:
                         task.status = TaskStatus.SUCCEEDED
                         task.progress = 100
                         task.set_result(result)
-                        task.completed_at = datetime.utcnow()
+                        task.completed_at = datetime.now(UTC)
                         db.session.commit()
-                        app.logger.info(f"Task {task_id} completed successfully")
+                        app.logger.info(f"Task {task_id} completed successfully", extra={'task_id': task_id})
         
         except Exception as e:
             with app.app_context():
@@ -137,9 +148,9 @@ class TaskExecutor:
                 if task and task.status != TaskStatus.CANCELLED:
                     task.status = TaskStatus.FAILED
                     task.set_error({'message': str(e), 'type': type(e).__name__})
-                    task.completed_at = datetime.utcnow()
+                    task.completed_at = datetime.now(UTC)
                     db.session.commit()
-                    app.logger.error(f"Task {task_id} failed: {str(e)}")
+                    app.logger.error(f"Task {task_id} failed: {str(e)}", extra={'task_id': task_id})
         
         finally:
             self._task_contexts.pop(task_id, None)
@@ -157,9 +168,9 @@ class TaskExecutor:
             task = Task.query.get(task_id)
             if task and task.status in [TaskStatus.PENDING, TaskStatus.RUNNING]:
                 task.status = TaskStatus.CANCELLED
-                task.cancelled_at = datetime.utcnow()
+                task.cancelled_at = datetime.now(UTC)
                 db.session.commit()
-                self._app.logger.info(f"Task {task_id} cancelled")
+                self._app.logger.info(f"Task {task_id} cancelled", extra={'task_id': task_id})
                 cancelled = True
         
         return cancelled

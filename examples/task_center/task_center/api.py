@@ -1,6 +1,7 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, UTC
 from flask import Blueprint, request, jsonify
+from sqlalchemy.exc import IntegrityError
 from task_center import db, executor
 from task_center.models import Task, TaskStatus
 
@@ -13,18 +14,13 @@ def create_task():
     required_fields = ['name', 'type']
     for field in required_fields:
         if field not in data:
-            return jsonify({'error': f'Missing required field: {field}'}), 400
+            return jsonify({
+                'error': f'Missing required field: {field}',
+                'data': None,
+                'message': None
+            }), 400
     
     idempotency_key = data.get('idempotency_key')
-    
-    if idempotency_key:
-        existing_task = Task.query.filter_by(idempotency_key=idempotency_key).first()
-        if existing_task:
-            return jsonify({
-                'task': existing_task.to_dict(),
-                'message': 'Task with same idempotency key already exists'
-            }), 200
-    
     task_id = str(uuid.uuid4())
     task = Task(
         id=task_id,
@@ -39,29 +35,59 @@ def create_task():
     if 'payload' in data:
         task.set_payload(data['payload'])
     
-    db.session.add(task)
-    db.session.commit()
-    
     try:
-        executor.submit_task(task_id, data['type'], data.get('payload'))
-    except ValueError as e:
-        task.status = TaskStatus.FAILED
-        task.set_error({'message': str(e)})
+        db.session.add(task)
         db.session.commit()
-        return jsonify({'error': str(e)}), 400
-    
-    return jsonify({
-        'task': task.to_dict(),
-        'message': 'Task created successfully'
-    }), 201
+        
+        try:
+            executor.submit_task(task_id, data['type'], data.get('payload'))
+        except ValueError as e:
+            task.status = TaskStatus.FAILED
+            task.set_error({'message': str(e)})
+            db.session.commit()
+            return jsonify({
+                'error': str(e),
+                'data': None,
+                'message': None
+            }), 400
+        
+        return jsonify({
+            'error': None,
+            'data': {'task': task.to_dict()},
+            'message': 'Task created successfully'
+        }), 201
+        
+    except IntegrityError:
+        db.session.rollback()
+        if idempotency_key:
+            existing_task = Task.query.filter_by(idempotency_key=idempotency_key).first()
+            if existing_task:
+                return jsonify({
+                    'error': None,
+                    'data': {'task': existing_task.to_dict()},
+                    'message': 'Task with same idempotency key already exists'
+                }), 200
+        return jsonify({
+            'error': 'Failed to create task due to integrity constraint',
+            'data': None,
+            'message': None
+        }), 409
 
 @api_bp.route('/tasks/<task_id>', methods=['GET'])
 def get_task(task_id):
     task = Task.query.get(task_id)
     if not task:
-        return jsonify({'error': 'Task not found'}), 404
+        return jsonify({
+            'error': 'Task not found',
+            'data': None,
+            'message': None
+        }), 404
     
-    return jsonify({'task': task.to_dict()})
+    return jsonify({
+        'error': None,
+        'data': {'task': task.to_dict()},
+        'message': 'Task retrieved successfully'
+    })
 
 @api_bp.route('/tasks', methods=['GET'])
 def list_tasks():
@@ -77,7 +103,11 @@ def list_tasks():
             status_enum = TaskStatus(status.lower())
             query = query.filter_by(status=status_enum)
         except ValueError:
-            return jsonify({'error': f'Invalid status: {status}. Valid statuses: {[s.value for s in TaskStatus]}'}), 400
+            return jsonify({
+                'error': f'Invalid status: {status}. Valid statuses: {[s.value for s in TaskStatus]}',
+                'data': None,
+                'message': None
+            }), 400
     
     if task_type:
         query = query.filter_by(type=task_type)
@@ -86,50 +116,69 @@ def list_tasks():
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     
     return jsonify({
-        'tasks': [task.to_dict() for task in pagination.items],
-        'pagination': {
-            'page': page,
-            'per_page': per_page,
-            'total': pagination.total,
-            'pages': pagination.pages,
-            'has_next': pagination.has_next,
-            'has_prev': pagination.has_prev
-        }
+        'error': None,
+        'data': {
+            'tasks': [task.to_dict() for task in pagination.items],
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': pagination.total,
+                'pages': pagination.pages,
+                'has_next': pagination.has_next,
+                'has_prev': pagination.has_prev
+            }
+        },
+        'message': 'Tasks retrieved successfully'
     })
 
 @api_bp.route('/tasks/<task_id>/cancel', methods=['POST'])
 def cancel_task(task_id):
     task = Task.query.get(task_id)
     if not task:
-        return jsonify({'error': 'Task not found'}), 404
+        return jsonify({
+            'error': 'Task not found',
+            'data': None,
+            'message': None
+        }), 404
     
     if task.status in [TaskStatus.SUCCEEDED, TaskStatus.FAILED, TaskStatus.CANCELLED]:
         return jsonify({
             'error': f'Cannot cancel task in {task.status.value} status',
-            'task': task.to_dict()
+            'data': {'task': task.to_dict()},
+            'message': None
         }), 400
     
     if executor.cancel_task(task_id):
         # Refresh task to get updated status
         db.session.refresh(task)
         return jsonify({
-            'task': task.to_dict(),
+            'error': None,
+            'data': {'task': task.to_dict()},
             'message': 'Task cancellation requested'
         })
     else:
         task.status = TaskStatus.CANCELLED
-        task.cancelled_at = datetime.utcnow()
+        task.cancelled_at = datetime.now(UTC)
         db.session.commit()
         return jsonify({
-            'task': task.to_dict(),
+            'error': None,
+            'data': {'task': task.to_dict()},
             'message': 'Task marked as cancelled'
         })
 
 @api_bp.errorhandler(404)
 def not_found(error):
-    return jsonify({'error': 'Not found'}), 404
+    return jsonify({
+        'error': 'Not found',
+        'data': None,
+        'message': None
+    }), 404
 
 @api_bp.errorhandler(500)
 def internal_error(error):
     db.session.rollback()
-    return jsonify({'error': 'Internal server error'}), 500
+    return jsonify({
+        'error': 'Internal server error',
+        'data': None,
+        'message': None
+    }), 500
