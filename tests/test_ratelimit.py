@@ -240,6 +240,23 @@ class TestRateLimitWindowReset:
         assert info_reset.count == 1
         assert info_reset.remaining == 1
 
+    def test_window_reset_at_exact_boundary(self):
+        limiter = flask.RateLimiter(default_limit=2, default_window=60)
+
+        limiter.check("127.0.0.1", "/test")
+        limiter.check("127.0.0.1", "/test")
+        info = limiter.check("127.0.0.1", "/test")
+        assert info.count == 3
+        assert info.count > info.limit
+
+        key = limiter._get_key("127.0.0.1", "/test")
+        count, reset_time = limiter._storage[key]
+        limiter._storage[key] = (count, time.time())
+
+        info_reset = limiter.check("127.0.0.1", "/test")
+        assert info_reset.count == 1
+        assert info_reset.remaining == 1
+
     def test_middleware_window_reset(self):
         app = self._create_app()
 
