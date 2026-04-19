@@ -140,7 +140,7 @@ class StructuredFormatter(logging.Formatter):
             log_data["exception"] = self.formatException(record.exc_info)
 
         if hasattr(record, "request_info"):
-            log_data.update(record.request_info)
+            log_data["request_info"] = record.request_info
 
         return json.dumps(log_data, ensure_ascii=False)
 
