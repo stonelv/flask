@@ -7,9 +7,11 @@ import time
 import typing as t
 import uuid
 from datetime import datetime
+from datetime import timezone
 
 from werkzeug.local import LocalProxy
 
+from .globals import _cv_app
 from .globals import g
 from .globals import request
 
@@ -73,6 +75,8 @@ def get_request_id() -> str | None:
 
     :return: The request ID if available, otherwise None.
     """
+    if _cv_app.get(None) is None:
+        return None
     return g.get("request_id")
 
 
@@ -124,7 +128,7 @@ class StructuredFormatter(logging.Formatter):
         :return: A JSON string representing the structured log entry.
         """
         log_data = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "level": record.levelname,
             "module": record.module,
             "function": record.funcName,
