@@ -54,7 +54,7 @@ class RateLimiter:
 
         count, reset_time = self._storage[key]
 
-        if current_time > reset_time:
+        if current_time >= reset_time:
             self._storage[key] = (1, current_time + window)
             return RateLimitInfo(
                 count=1,
