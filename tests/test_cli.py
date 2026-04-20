@@ -698,6 +698,138 @@ class TestRoutesJSON:
         explicit_text_result = invoke(["routes", "--format", "text"])
         assert text_result.output == explicit_text_result.output
 
+    def test_json_fixed_key_order(self, invoke):
+        result = invoke(["routes", "--format", "json"])
+        data = self.parse_json(result.output)
+
+        expected_order = ["endpoint", "methods", "rule", "host_matching"]
+        for route in data:
+            keys = list(route.keys())
+            assert keys == expected_order
+
+    def test_json_domain_empty_string(self, runner):
+        app = Flask(__name__, static_folder=None)
+        app.add_url_rule("/a", subdomain="api", endpoint="a")
+        app.add_url_rule("/b", endpoint="b")
+
+        cli = FlaskGroup(create_app=lambda: app)
+        result = runner.invoke(cli, ["routes", "--format", "json"])
+        data = self.parse_json(result.output)
+
+        for route in data:
+            assert "subdomain" in route
+            assert isinstance(route["subdomain"], str)
+            assert route["subdomain"] is not None
+
+        a_route = next((r for r in data if r["endpoint"] == "a"), None)
+        assert a_route["subdomain"] == "api"
+
+        b_route = next((r for r in data if r["endpoint"] == "b"), None)
+        assert b_route["subdomain"] == ""
+
+    def test_json_no_domain_when_none_defined(self, runner):
+        app = Flask(__name__, static_folder=None)
+        app.add_url_rule("/a", endpoint="a")
+        app.add_url_rule("/b", endpoint="b")
+
+        cli = FlaskGroup(create_app=lambda: app)
+        result = runner.invoke(cli, ["routes", "--format", "json"])
+        data = self.parse_json(result.output)
+
+        for route in data:
+            assert "subdomain" not in route
+            assert "host" not in route
+
+    def test_json_host_matching_empty_string(self, runner):
+        app = Flask(__name__, static_folder=None, host_matching=True)
+        app.add_url_rule("/a", host="api.example.com", endpoint="a")
+        app.add_url_rule("/b", host="", endpoint="b")
+
+        cli = FlaskGroup(create_app=lambda: app)
+        result = runner.invoke(cli, ["routes", "--format", "json"])
+        data = self.parse_json(result.output)
+
+        for route in data:
+            assert "host" in route
+            assert isinstance(route["host"], str)
+
+        a_route = next((r for r in data if r["endpoint"] == "a"), None)
+        assert a_route["host"] == "api.example.com"
+
+        b_route = next((r for r in data if r["endpoint"] == "b"), None)
+        assert b_route["host"] == ""
+
+    def test_json_key_order_with_all_fields(self, runner):
+        app = Flask(__name__, static_folder=None)
+        app.add_url_rule(
+            "/user/<name>",
+            endpoint="user",
+            subdomain="api",
+            defaults={"name": "guest"},
+        )
+
+        cli = FlaskGroup(create_app=lambda: app)
+        result = runner.invoke(cli, ["routes", "--format", "json"])
+        data = self.parse_json(result.output)
+
+        expected_order = [
+            "endpoint",
+            "methods",
+            "rule",
+            "host_matching",
+            "subdomain",
+            "defaults",
+        ]
+        keys = list(data[0].keys())
+        assert keys == expected_order
+
+    def test_json_host_matching_key_order(self, runner):
+        app = Flask(__name__, static_folder=None, host_matching=True)
+        app.add_url_rule("/a", host="api.example.com", endpoint="a")
+
+        cli = FlaskGroup(create_app=lambda: app)
+        result = runner.invoke(cli, ["routes", "--format", "json"])
+        data = self.parse_json(result.output)
+
+        expected_order = ["endpoint", "methods", "rule", "host_matching", "host"]
+        keys = list(data[0].keys())
+        assert keys == expected_order
+
+    def test_json_text_json_domain_consistency(self, runner):
+        app = Flask(__name__, static_folder=None)
+        app.add_url_rule("/a", subdomain="api", endpoint="a")
+        app.add_url_rule("/b", endpoint="b")
+
+        cli = FlaskGroup(create_app=lambda: app)
+
+        text_result = runner.invoke(cli, ["routes"])
+        json_result = runner.invoke(cli, ["routes", "--format", "json"])
+
+        lines = text_result.output.strip().split("\n")
+        header_line = lines[0]
+        assert "Subdomain" in header_line
+
+        data = self.parse_json(json_result.output)
+        for route in data:
+            assert "subdomain" in route
+            assert isinstance(route["subdomain"], str)
+
+    def test_json_no_defaults_when_none(self, runner):
+        app = Flask(__name__, static_folder=None)
+        app.add_url_rule("/a", endpoint="a")
+        app.add_url_rule("/b", endpoint="b", defaults={"x": 1})
+
+        cli = FlaskGroup(create_app=lambda: app)
+        result = runner.invoke(cli, ["routes", "--format", "json"])
+        data = self.parse_json(result.output)
+
+        a_route = next((r for r in data if r["endpoint"] == "a"), None)
+        assert "defaults" not in a_route
+
+        b_route = next((r for r in data if r["endpoint"] == "b"), None)
+        assert "defaults" in b_route
+        assert b_route["defaults"] == {"x": 1}
+
 
 def dotenv_not_available():
     try:
