@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import secrets
 import typing as t
-import weakref
-from contextvars import ContextVar
 
 from jinja2 import BaseLoader
 from jinja2 import Environment as BaseEnvironment
@@ -12,12 +10,10 @@ from jinja2 import TemplateNotFound
 
 from .ctx import AppContext
 from .globals import app_ctx
+from .globals import g
 from .helpers import stream_with_context
 from .signals import before_render_template
 from .signals import template_rendered
-
-_cv_request_id: ContextVar[str] = ContextVar("flask.request_id")
-_request_id_cache: weakref.WeakKeyDictionary[AppContext, str] = weakref.WeakKeyDictionary()
 
 if t.TYPE_CHECKING:  # pragma: no cover
     from .sansio.app import App
@@ -58,11 +54,9 @@ def _default_request_context_var_processor() -> dict[str, t.Any]:
     if ctx.has_request:
         request = ctx.request
 
-        request_id = _request_id_cache.get(ctx)
-        if request_id is None:
-            request_id = secrets.token_urlsafe(16)
-            _request_id_cache[ctx] = request_id
-        rv["request_id"] = request_id
+        if not hasattr(g, "_flask_request_id"):
+            g._flask_request_id = secrets.token_urlsafe(16)
+        rv["request_id"] = g._flask_request_id
 
         rv["remote_addr"] = request.remote_addr
 
