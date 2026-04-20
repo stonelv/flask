@@ -239,7 +239,7 @@ class DefaultJSONProvider(JSONProvider):
         if should_pretty or (self.compact is None and self._app.debug) or self.compact is False:
             dump_args.setdefault("indent", 2)
             if should_pretty:
-                dump_args.setdefault("sort_keys", True)
+                dump_args["sort_keys"] = True
         else:
             dump_args.setdefault("separators", (",", ":"))
 

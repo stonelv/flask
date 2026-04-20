@@ -361,11 +361,13 @@ class TestPrettyPrint:
             return {"z": 1, "a": 2, "m": 3}
 
         rv = client.get("/dict")
-        assert b"\n" not in rv.data.strip() or b"  " not in rv.data
+        data = rv.data.decode().strip()
+        assert data == '{"a":2,"m":3,"z":1}'
 
         rv = client.get("/dict?pretty=1")
         data = rv.data.decode()
         assert "  " in data
+        assert '": ' in data
         assert '"a": 2' in data
         assert '"m": 3' in data
         assert '"z": 1' in data
@@ -444,8 +446,10 @@ class TestPrettyPrint:
             return {"z": 1, "a": 2}
 
         rv = client.get(f"/dict?pretty={value}")
-        data = rv.data.decode()
-        assert "  " not in data or '"z": 1' not in data
+        data = rv.data.decode().strip()
+        assert data == '{"a":2,"z":1}'
+        assert "  " not in data
+        assert '": ' not in data
 
     def test_pretty_sort_keys_always_enabled(self, app, client):
         """Test that sort_keys is always enabled when pretty-print is requested."""
@@ -524,3 +528,26 @@ class TestPrettyPrint:
         rv = client.get("/dict?pretty=1")
         data = rv.data.decode()
         assert "  " in data
+
+    def test_pretty_does_not_affect_direct_response(self, app, client):
+        """Test that pretty-print does not affect views returning Response directly."""
+        import flask
+
+        @app.route("/direct")
+        def return_direct_response():
+            return flask.Response(
+                '{"z":1,"a":2,"m":3}',
+                mimetype="application/json"
+            )
+
+        rv = client.get("/direct?pretty=1")
+        data = rv.data.decode().strip()
+        assert data == '{"z":1,"a":2,"m":3}'
+        assert "  " not in data
+        assert '": ' not in data
+
+        rv = client.get("/direct", headers={"X-Flask-Pretty": "1"})
+        data = rv.data.decode().strip()
+        assert data == '{"z":1,"a":2,"m":3}'
+        assert "  " not in data
+        assert '": ' not in data
