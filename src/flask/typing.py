@@ -64,6 +64,9 @@ TeardownCallable = (
 TemplateContextProcessorCallable = (
     t.Callable[[], dict[str, t.Any]] | t.Callable[[], t.Awaitable[dict[str, t.Any]]]
 )
+RequestContextVarProcessorCallable = (
+    t.Callable[[], dict[str, t.Any]] | t.Callable[[], t.Awaitable[dict[str, t.Any]]]
+)
 TemplateFilterCallable = t.Callable[..., t.Any]
 TemplateGlobalCallable = t.Callable[..., t.Any]
 TemplateTestCallable = t.Callable[..., bool]

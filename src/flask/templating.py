@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import secrets
 import typing as t
+import weakref
+from contextvars import ContextVar
 
 from jinja2 import BaseLoader
 from jinja2 import Environment as BaseEnvironment
@@ -12,6 +15,9 @@ from .globals import app_ctx
 from .helpers import stream_with_context
 from .signals import before_render_template
 from .signals import template_rendered
+
+_cv_request_id: ContextVar[str] = ContextVar("flask.request_id")
+_request_id_cache: weakref.WeakKeyDictionary[AppContext, str] = weakref.WeakKeyDictionary()
 
 if t.TYPE_CHECKING:  # pragma: no cover
     from .sansio.app import App
@@ -28,6 +34,43 @@ def _default_template_ctx_processor() -> dict[str, t.Any]:
     if ctx.has_request:
         rv["request"] = ctx.request
         rv["session"] = ctx.session
+
+    return rv
+
+
+def _default_request_context_var_processor() -> dict[str, t.Any]:
+    """Default request context variable processor. Injects request-related
+    variables like `request_id`, `remote_addr`, `user_agent`, etc.
+    Only injected when :data:`REQUEST_CONTEXT_VARS_ENABLED` is ``True``.
+
+    Injected variables:
+    - ``request_id``: A unique identifier for the request
+    - ``remote_addr``: The client IP address
+    - ``user_agent``: The User-Agent header value
+    - ``request_method``: The HTTP method (GET, POST, etc.)
+    - ``request_path``: The request path
+
+    .. versionadded:: 3.2
+    """
+    ctx = app_ctx._get_current_object()
+    rv: dict[str, t.Any] = {}
+
+    if ctx.has_request:
+        request = ctx.request
+
+        request_id = _request_id_cache.get(ctx)
+        if request_id is None:
+            request_id = secrets.token_urlsafe(16)
+            _request_id_cache[ctx] = request_id
+        rv["request_id"] = request_id
+
+        rv["remote_addr"] = request.remote_addr
+
+        user_agent = request.headers.get("User-Agent")
+        rv["user_agent"] = user_agent
+
+        rv["request_method"] = request.method
+        rv["request_path"] = request.path
 
     return rv
 

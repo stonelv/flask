@@ -233,6 +233,8 @@ class Flask(App):
             "TEMPLATES_AUTO_RELOAD": None,
             "MAX_COOKIE_SIZE": 4093,
             "PROVIDE_AUTOMATIC_OPTIONS": True,
+            "REQUEST_CONTEXT_VARS_ENABLED": False,
+            "REQUEST_CONTEXT_VARS_INCLUDE_DEFAULT": True,
         }
     )
 
@@ -601,12 +603,9 @@ class Flask(App):
         """
         names: t.Iterable[str | None] = (None,)
 
-        # A template may be rendered outside a request context.
         if ctx.has_request:
-            names = chain(names, reversed(ctx.request.blueprints))
+            names = list(chain(names, reversed(ctx.request.blueprints)))
 
-        # The values passed to render_template take precedence. Keep a
-        # copy to re-apply after all context functions.
         orig_ctx = context.copy()
 
         for name in names:
@@ -614,7 +613,31 @@ class Flask(App):
                 for func in self.template_context_processors[name]:
                     context.update(self.ensure_sync(func)())
 
+        if self.config["REQUEST_CONTEXT_VARS_ENABLED"]:
+            self._update_request_context_vars(ctx, context, names)
+
         context.update(orig_ctx)
+
+    def _update_request_context_vars(
+        self, ctx: AppContext, context: dict[str, t.Any], names: t.Iterable[str | None]
+    ) -> None:
+        """Update the template context with request-related variables.
+        This is called only when :data:`REQUEST_CONTEXT_VARS_ENABLED`
+        is set to ``True``.
+
+        :param ctx: The current application context.
+        :param context: The template context dictionary to update.
+        :param names: The list of blueprint names to process.
+        """
+        from .templating import _default_request_context_var_processor
+
+        if self.config["REQUEST_CONTEXT_VARS_INCLUDE_DEFAULT"]:
+            context.update(self.ensure_sync(_default_request_context_var_processor)())
+
+        for name in names:
+            if name in self.request_context_var_processors:
+                for func in self.request_context_var_processors[name]:
+                    context.update(self.ensure_sync(func)())
 
     def make_shell_context(self) -> dict[str, t.Any]:
         """Returns the shell context for an interactive shell for this
