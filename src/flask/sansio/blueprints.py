@@ -22,6 +22,9 @@ T_teardown = t.TypeVar("T_teardown", bound=ft.TeardownCallable)
 T_template_context_processor = t.TypeVar(
     "T_template_context_processor", bound=ft.TemplateContextProcessorCallable
 )
+T_request_context_var_processor = t.TypeVar(
+    "T_request_context_var_processor", bound=ft.RequestContextVarProcessorCallable
+)
 T_template_filter = t.TypeVar("T_template_filter", bound=ft.TemplateFilterCallable)
 T_template_global = t.TypeVar("T_template_global", bound=ft.TemplateGlobalCallable)
 T_template_test = t.TypeVar("T_template_test", bound=ft.TemplateTestCallable)
@@ -408,6 +411,7 @@ class Blueprint(Scaffold):
         extend(self.url_default_functions, app.url_default_functions)
         extend(self.url_value_preprocessors, app.url_value_preprocessors)
         extend(self.template_context_processors, app.template_context_processors)
+        extend(self.request_context_var_processors, app.request_context_var_processors)
 
     @setupmethod
     def add_url_rule(
@@ -649,6 +653,20 @@ class Blueprint(Scaffold):
         """
         self.record_once(
             lambda s: s.app.template_context_processors.setdefault(None, []).append(f)
+        )
+        return f
+
+    @setupmethod
+    def app_request_context_var_processor(
+        self, f: T_request_context_var_processor
+    ) -> T_request_context_var_processor:
+        """Like :meth:`request_context_var_processor`, but for templates rendered by every
+        view, not only by the blueprint. Equivalent to :meth:`.Flask.request_context_var_processor`.
+
+        .. versionadded:: 3.2
+        """
+        self.record_once(
+            lambda s: s.app.request_context_var_processors.setdefault(None, []).append(f)
         )
         return f
 

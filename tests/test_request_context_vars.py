@@ -155,3 +155,55 @@ class TestRequestContextVars:
             return {"key": "value"}
 
         assert my_processor in app.request_context_var_processors[None]
+
+    def test_blueprint_scope(self, app, client):
+        app.config["REQUEST_CONTEXT_VARS_ENABLED"] = True
+        bp = flask.Blueprint("test_bp", __name__)
+
+        @bp.request_context_var_processor
+        def bp_processor():
+            return {"bp_var": "bp_value"}
+
+        @bp.route("/bp")
+        def bp_route():
+            return flask.render_template_string(
+                "{{ bp_var }}|{{ request_id is defined }}"
+            )
+
+        app.register_blueprint(bp, url_prefix="/api")
+
+        @app.route("/non_bp")
+        def non_bp_route():
+            return flask.render_template_string(
+                "{{ bp_var is undefined }}|{{ request_id is defined }}"
+            )
+
+        rv = client.get("/api/bp")
+        assert rv.data == b"bp_value|True"
+
+        rv = client.get("/non_bp")
+        assert rv.data == b"True|True"
+
+    def test_app_request_context_var_processor(self, app, client):
+        app.config["REQUEST_CONTEXT_VARS_ENABLED"] = True
+        bp = flask.Blueprint("test_bp", __name__)
+
+        @bp.app_request_context_var_processor
+        def app_wide_processor():
+            return {"app_wide_var": "app_wide_value"}
+
+        @bp.route("/bp")
+        def bp_route():
+            return flask.render_template_string("{{ app_wide_var }}")
+
+        app.register_blueprint(bp, url_prefix="/api")
+
+        @app.route("/non_bp")
+        def non_bp_route():
+            return flask.render_template_string("{{ app_wide_var }}")
+
+        rv = client.get("/api/bp")
+        assert rv.data == b"app_wide_value"
+
+        rv = client.get("/non_bp")
+        assert rv.data == b"app_wide_value"
