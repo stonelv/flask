@@ -518,6 +518,187 @@ class TestRoutes:
         assert "Host" in result.output
 
 
+class TestRoutesJSON:
+    @pytest.fixture
+    def app(self):
+        app = Flask(__name__)
+        app.add_url_rule(
+            "/get_post/<int:x>/<int:y>",
+            methods=["GET", "POST"],
+            endpoint="yyy_get_post",
+        )
+        app.add_url_rule("/zzz_post", methods=["POST"], endpoint="aaa_post")
+        return app
+
+    @pytest.fixture
+    def invoke(self, app, runner):
+        cli = FlaskGroup(create_app=lambda: app)
+        return partial(runner.invoke, cli)
+
+    def parse_json(self, output):
+        import json
+
+        return json.loads(output)
+
+    def test_json_format(self, invoke):
+        result = invoke(["routes", "--format", "json"])
+        assert result.exit_code == 0
+        data = self.parse_json(result.output)
+        assert isinstance(data, list)
+        assert len(data) >= 2
+
+        endpoints = [r["endpoint"] for r in data]
+        assert "aaa_post" in endpoints
+        assert "yyy_get_post" in endpoints
+        assert "static" in endpoints
+
+        for route in data:
+            assert "endpoint" in route
+            assert "methods" in route
+            assert "rule" in route
+            assert "host_matching" in route
+            assert route["host_matching"] is False
+
+    def test_json_variable_rules(self, invoke):
+        result = invoke(["routes", "--format", "json"])
+        assert result.exit_code == 0
+        data = self.parse_json(result.output)
+
+        get_post_route = next(
+            (r for r in data if r["endpoint"] == "yyy_get_post"), None
+        )
+        assert get_post_route is not None
+        assert get_post_route["rule"] == "/get_post/<int:x>/<int:y>"
+        assert "GET" in get_post_route["methods"]
+        assert "POST" in get_post_route["methods"]
+
+    def test_json_methods_filtered(self, invoke):
+        result = invoke(["routes", "--format", "json"])
+        data = self.parse_json(result.output)
+
+        for route in data:
+            if route["endpoint"] == "yyy_get_post":
+                assert "HEAD" not in route["methods"]
+                assert "OPTIONS" not in route["methods"]
+                assert "GET" in route["methods"]
+                assert "POST" in route["methods"]
+
+    def test_json_all_methods(self, invoke):
+        result = invoke(["routes", "--format", "json", "--all-methods"])
+        data = self.parse_json(result.output)
+
+        for route in data:
+            if route["endpoint"] == "yyy_get_post":
+                assert "HEAD" in route["methods"]
+                assert "OPTIONS" in route["methods"]
+                assert "GET" in route["methods"]
+                assert "POST" in route["methods"]
+
+    def test_json_sort(self, invoke):
+        result = invoke(["routes", "--format", "json", "-s", "endpoint"])
+        data = self.parse_json(result.output)
+        endpoints = [r["endpoint"] for r in data]
+        assert endpoints == sorted(endpoints)
+
+    def test_json_sort_match(self, app, invoke):
+        match_order = [r.endpoint for r in app.url_map.iter_rules()]
+        result = invoke(["routes", "--format", "json", "-s", "match"])
+        data = self.parse_json(result.output)
+        endpoints = [r["endpoint"] for r in data]
+        assert endpoints == match_order
+
+    def test_json_no_routes(self, runner):
+        app = Flask(__name__, static_folder=None)
+        cli = FlaskGroup(create_app=lambda: app)
+        result = runner.invoke(cli, ["routes", "--format", "json"])
+        assert result.exit_code == 0
+        data = self.parse_json(result.output)
+        assert data == []
+
+    def test_json_subdomain(self, runner):
+        app = Flask(__name__, static_folder=None)
+        app.add_url_rule("/a", subdomain="a", endpoint="a")
+        app.add_url_rule("/b", subdomain="b", endpoint="b")
+        cli = FlaskGroup(create_app=lambda: app)
+        result = runner.invoke(cli, ["routes", "--format", "json"])
+        assert result.exit_code == 0
+        data = self.parse_json(result.output)
+
+        for route in data:
+            assert "subdomain" in route
+            assert route["host_matching"] is False
+
+        a_route = next((r for r in data if r["endpoint"] == "a"), None)
+        assert a_route is not None
+        assert a_route["subdomain"] == "a"
+
+    def test_json_host_matching(self, runner):
+        app = Flask(__name__, static_folder=None, host_matching=True)
+        app.add_url_rule("/a", host="a.example.com", endpoint="a")
+        app.add_url_rule("/b", host="b.example.com", endpoint="b")
+        cli = FlaskGroup(create_app=lambda: app)
+        result = runner.invoke(cli, ["routes", "--format", "json"])
+        assert result.exit_code == 0
+        data = self.parse_json(result.output)
+
+        for route in data:
+            assert "host" in route
+            assert route["host_matching"] is True
+
+        a_route = next((r for r in data if r["endpoint"] == "a"), None)
+        assert a_route is not None
+        assert a_route["host"] == "a.example.com"
+
+    def test_json_defaults(self, runner):
+        app = Flask(__name__, static_folder=None)
+        app.add_url_rule(
+            "/user/<name>",
+            endpoint="user",
+            defaults={"name": "guest"},
+        )
+        cli = FlaskGroup(create_app=lambda: app)
+        result = runner.invoke(cli, ["routes", "--format", "json"])
+        assert result.exit_code == 0
+        data = self.parse_json(result.output)
+
+        user_route = next((r for r in data if r["endpoint"] == "user"), None)
+        assert user_route is not None
+        assert "defaults" in user_route
+        assert user_route["defaults"] == {"name": "guest"}
+
+    def test_json_blueprint_prefix(self, runner):
+        app = Flask(__name__, static_folder=None)
+        bp = Blueprint("api", __name__, url_prefix="/api")
+        bp.add_url_rule("/users", endpoint="users")
+        bp.add_url_rule("/posts/<int:post_id>", endpoint="post_detail")
+        app.register_blueprint(bp)
+
+        cli = FlaskGroup(create_app=lambda: app)
+        result = runner.invoke(cli, ["routes", "--format", "json"])
+        assert result.exit_code == 0
+        data = self.parse_json(result.output)
+
+        users_route = next((r for r in data if r["endpoint"] == "api.users"), None)
+        assert users_route is not None
+        assert users_route["rule"] == "/api/users"
+
+        post_route = next(
+            (r for r in data if r["endpoint"] == "api.post_detail"), None
+        )
+        assert post_route is not None
+        assert post_route["rule"] == "/api/posts/<int:post_id>"
+
+    def test_json_stable_output(self, invoke):
+        result1 = invoke(["routes", "--format", "json", "-s", "endpoint"])
+        result2 = invoke(["routes", "--format", "json", "-s", "endpoint"])
+        assert result1.output == result2.output
+
+    def test_text_format_unchanged(self, invoke):
+        text_result = invoke(["routes"])
+        explicit_text_result = invoke(["routes", "--format", "text"])
+        assert text_result.output == explicit_text_result.output
+
+
 def dotenv_not_available():
     try:
         import dotenv  # noqa: F401
