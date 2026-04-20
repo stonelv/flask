@@ -2,6 +2,7 @@
 name = "rbac_example"
 version = "1.0.0"
 description = "Demonstrates Role-Based Access Control (RBAC) with admin/editor/viewer roles."
+readme = "README.rst"
 license = {file = "LICENSE.txt"}
 maintainers = [{name = "Pallets", email = "contact@palletsprojects.com"}]
 classifiers = ["Private :: Do Not Upload"]

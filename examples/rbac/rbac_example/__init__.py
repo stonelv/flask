@@ -97,32 +97,41 @@ def manage_users():
     })
 
 
-@app.route("/api/content", methods=["GET", "POST"])
+@app.route("/api/content", methods=["GET"])
 @login_required
 @check_permission("read")
-def read_content():
-    if request.method == "POST":
-        return jsonify({
-            "message": "Content created",
-            "user": g.user.get("username")
-        })
+def get_content():
     return jsonify({
         "message": "Content read access granted",
         "content": "Sample content"
     })
 
 
-@app.route("/api/content", methods=["PUT", "DELETE"])
+@app.route("/api/content", methods=["POST"])
 @login_required
 @check_permission("write")
-def modify_content():
-    if request.method == "PUT":
-        return jsonify({
-            "message": "Content updated",
-            "user": g.user.get("username")
-        })
-    if request.method == "DELETE":
-        return jsonify({
-            "message": "Content deleted",
-            "user": g.user.get("username")
-        })
+def create_content():
+    return jsonify({
+        "message": "Content created",
+        "user": g.user.get("username")
+    })
+
+
+@app.route("/api/content", methods=["PUT"])
+@login_required
+@check_permission("write")
+def update_content():
+    return jsonify({
+        "message": "Content updated",
+        "user": g.user.get("username")
+    })
+
+
+@app.route("/api/content", methods=["DELETE"])
+@login_required
+@check_permission("write")
+def delete_content():
+    return jsonify({
+        "message": "Content deleted",
+        "user": g.user.get("username")
+    })
