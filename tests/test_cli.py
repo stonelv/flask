@@ -698,14 +698,28 @@ class TestRoutesJSON:
         explicit_text_result = invoke(["routes", "--format", "text"])
         assert text_result.output == explicit_text_result.output
 
-    def test_json_fixed_key_order(self, invoke):
-        result = invoke(["routes", "--format", "json"])
+    def test_json_fixed_key_order(self, runner):
+        app = Flask(__name__, static_folder=None)
+        app.add_url_rule("/a", endpoint="a")
+        app.add_url_rule(
+            "/b",
+            endpoint="b",
+            defaults={"x": 1},
+        )
+
+        cli = FlaskGroup(create_app=lambda: app)
+        result = runner.invoke(cli, ["routes", "--format", "json"])
         data = self.parse_json(result.output)
 
-        expected_order = ["endpoint", "methods", "rule", "host_matching"]
-        for route in data:
-            keys = list(route.keys())
-            assert keys == expected_order
+        a_route = next((r for r in data if r["endpoint"] == "a"), None)
+        assert a_route is not None
+        keys_a = list(a_route.keys())
+        assert keys_a == ["endpoint", "methods", "rule", "host_matching"]
+
+        b_route = next((r for r in data if r["endpoint"] == "b"), None)
+        assert b_route is not None
+        keys_b = list(b_route.keys())
+        assert keys_b == ["endpoint", "methods", "rule", "host_matching", "defaults"]
 
     def test_json_domain_empty_string(self, runner):
         app = Flask(__name__, static_folder=None)
@@ -722,9 +736,11 @@ class TestRoutesJSON:
             assert route["subdomain"] is not None
 
         a_route = next((r for r in data if r["endpoint"] == "a"), None)
+        assert a_route is not None
         assert a_route["subdomain"] == "api"
 
         b_route = next((r for r in data if r["endpoint"] == "b"), None)
+        assert b_route is not None
         assert b_route["subdomain"] == ""
 
     def test_json_no_domain_when_none_defined(self, runner):
@@ -754,9 +770,11 @@ class TestRoutesJSON:
             assert isinstance(route["host"], str)
 
         a_route = next((r for r in data if r["endpoint"] == "a"), None)
+        assert a_route is not None
         assert a_route["host"] == "api.example.com"
 
         b_route = next((r for r in data if r["endpoint"] == "b"), None)
+        assert b_route is not None
         assert b_route["host"] == ""
 
     def test_json_key_order_with_all_fields(self, runner):
@@ -767,10 +785,14 @@ class TestRoutesJSON:
             subdomain="api",
             defaults={"name": "guest"},
         )
+        app.add_url_rule("/other", endpoint="other", subdomain="")
 
         cli = FlaskGroup(create_app=lambda: app)
         result = runner.invoke(cli, ["routes", "--format", "json"])
         data = self.parse_json(result.output)
+
+        user_route = next((r for r in data if r["endpoint"] == "user"), None)
+        assert user_route is not None
 
         expected_order = [
             "endpoint",
@@ -780,19 +802,36 @@ class TestRoutesJSON:
             "subdomain",
             "defaults",
         ]
-        keys = list(data[0].keys())
+        keys = list(user_route.keys())
         assert keys == expected_order
+
+        other_route = next((r for r in data if r["endpoint"] == "other"), None)
+        assert other_route is not None
+
+        expected_order_no_defaults = [
+            "endpoint",
+            "methods",
+            "rule",
+            "host_matching",
+            "subdomain",
+        ]
+        keys_other = list(other_route.keys())
+        assert keys_other == expected_order_no_defaults
 
     def test_json_host_matching_key_order(self, runner):
         app = Flask(__name__, static_folder=None, host_matching=True)
         app.add_url_rule("/a", host="api.example.com", endpoint="a")
+        app.add_url_rule("/b", host="", endpoint="b")
 
         cli = FlaskGroup(create_app=lambda: app)
         result = runner.invoke(cli, ["routes", "--format", "json"])
         data = self.parse_json(result.output)
 
+        a_route = next((r for r in data if r["endpoint"] == "a"), None)
+        assert a_route is not None
+
         expected_order = ["endpoint", "methods", "rule", "host_matching", "host"]
-        keys = list(data[0].keys())
+        keys = list(a_route.keys())
         assert keys == expected_order
 
     def test_json_text_json_domain_consistency(self, runner):
@@ -824,9 +863,11 @@ class TestRoutesJSON:
         data = self.parse_json(result.output)
 
         a_route = next((r for r in data if r["endpoint"] == "a"), None)
+        assert a_route is not None
         assert "defaults" not in a_route
 
         b_route = next((r for r in data if r["endpoint"] == "b"), None)
+        assert b_route is not None
         assert "defaults" in b_route
         assert b_route["defaults"] == {"x": 1}
 

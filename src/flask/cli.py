@@ -1085,12 +1085,11 @@ def routes_command(sort: str, all_methods: bool, format: str) -> None:
         methods = sorted((rule.methods or set()) - ignored_methods)
         domain_value = (rule.host if host_matching else rule.subdomain) or ""
 
-        route_info = {
-            "endpoint": rule.endpoint,
-            "methods": methods,
-            "rule": rule.rule,
-            "host_matching": host_matching,
-        }
+        route_info = {}
+        route_info["endpoint"] = rule.endpoint
+        route_info["methods"] = methods
+        route_info["rule"] = rule.rule
+        route_info["host_matching"] = host_matching
 
         if has_domain:
             if host_matching:
