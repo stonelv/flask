@@ -1,0 +1,29 @@
+[project]
+name = "rbac_example"
+version = "1.0.0"
+description = "Demonstrates Role-Based Access Control (RBAC) with admin/editor/viewer roles."
+license = {file = "LICENSE.txt"}
+maintainers = [{name = "Pallets", email = "contact@palletsprojects.com"}]
+classifiers = ["Private :: Do Not Upload"]
+dependencies = ["flask"]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[build-system]
+requires = ["flit_core<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.flit.module]
+name = "rbac_example"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+branch = true
+source = ["rbac_example", "tests"]
+
+[tool.ruff]
+src = ["src"]
