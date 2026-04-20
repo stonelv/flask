@@ -129,6 +129,15 @@ class TestContentReadEndpoint:
 
 
 class TestContentWriteEndpoint:
+    def test_admin_can_create_content(self, client):
+        response = client.post(
+            "/api/content",
+            headers=get_auth_header("admin_user", "admin123")
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["message"] == "Content created"
+
     def test_admin_can_update_content(self, client):
         response = client.put(
             "/api/content",
@@ -146,6 +155,15 @@ class TestContentWriteEndpoint:
         assert response.status_code == 200
         data = response.get_json()
         assert data["message"] == "Content deleted"
+
+    def test_editor_can_create_content(self, client):
+        response = client.post(
+            "/api/content",
+            headers=get_auth_header("editor_user", "editor123")
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["message"] == "Content created"
 
     def test_editor_can_update_content(self, client):
         response = client.put(
@@ -165,6 +183,15 @@ class TestContentWriteEndpoint:
         data = response.get_json()
         assert data["message"] == "Content deleted"
 
+    def test_viewer_cannot_create_content(self, client):
+        response = client.post(
+            "/api/content",
+            headers=get_auth_header("viewer_user", "viewer123")
+        )
+        assert response.status_code == 403
+        data = response.get_json()
+        assert data["error"] == FORBIDDEN_MESSAGE
+
     def test_viewer_cannot_update_content(self, client):
         response = client.put(
             "/api/content",
@@ -179,6 +206,12 @@ class TestContentWriteEndpoint:
             "/api/content",
             headers=get_auth_header("viewer_user", "viewer123")
         )
+        assert response.status_code == 403
+        data = response.get_json()
+        assert data["error"] == FORBIDDEN_MESSAGE
+
+    def test_no_auth_cannot_create_content(self, client):
+        response = client.post("/api/content")
         assert response.status_code == 403
         data = response.get_json()
         assert data["error"] == FORBIDDEN_MESSAGE
@@ -201,6 +234,7 @@ class TestForbiddenMessageConsistency:
         endpoints = [
             ("/api/manage", "GET"),
             ("/api/content", "GET"),
+            ("/api/content", "POST"),
             ("/api/content", "PUT"),
             ("/api/content", "DELETE"),
             ("/login", "POST"),
