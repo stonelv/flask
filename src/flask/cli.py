@@ -1083,7 +1083,7 @@ def routes_command(sort: str, all_methods: bool, format: str) -> None:
     route_data = []
     for rule in rules:
         methods = sorted((rule.methods or set()) - ignored_methods)
-        domain = (rule.host if host_matching else rule.subdomain) or None
+        domain_value = (rule.host if host_matching else rule.subdomain) or ""
 
         route_info = {
             "endpoint": rule.endpoint,
@@ -1094,9 +1094,9 @@ def routes_command(sort: str, all_methods: bool, format: str) -> None:
 
         if has_domain:
             if host_matching:
-                route_info["host"] = domain
+                route_info["host"] = domain_value
             else:
-                route_info["subdomain"] = domain
+                route_info["subdomain"] = domain_value
 
         if rule.defaults:
             route_info["defaults"] = rule.defaults
