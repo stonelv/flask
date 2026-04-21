@@ -30,7 +30,9 @@ Unreleased
     code handlers take precedence over exception class handlers for
     ``HTTPException`` subclasses, blueprint handlers take precedence over
     app handlers for matching requests, and later registrations override
-    earlier ones for the same exception class or code. :issue:`TBD`
+    earlier ones for the same exception class or code. Input validation has
+    been added to explicitly reject strings/bytes and validate that all
+    elements in a sequence are either integer codes or exception classes.
 
 
 Version 3.1.2

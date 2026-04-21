@@ -659,7 +659,7 @@ class Blueprint(Scaffold):
         """Like :meth:`errorhandler`, but for every request, not only those handled by
         the blueprint. Equivalent to :meth:`.Flask.errorhandler`.
 
-        .. versionchanged:: 3.1
+        .. versionchanged:: 3.2
             Added support for registering a handler for multiple exception
             types or error codes at once by passing a sequence.
         """
