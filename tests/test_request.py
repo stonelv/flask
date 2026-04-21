@@ -246,7 +246,17 @@ def test_413_response_has_readable_error_message(app: Flask, client: FlaskClient
 
 
 def test_nested_blueprint_max_content_length(app: Flask, client: FlaskClient) -> None:
-    """Test that max_content_length works with nested blueprints."""
+    """Test that max_content_length works with nested blueprints.
+
+    Priority for nested blueprints:
+    - Innermost (most specific) blueprint > outer blueprint > global config
+    - If innermost blueprint doesn't have max_content_length set, use the
+      closest ancestor that has it set.
+    - Route-level max_content_length overrides all blueprint and global settings.
+
+    This test ensures that if the implementation incorrectly uses reversed()
+    (which would prioritize outer blueprints), the test will fail.
+    """
     app.config["MAX_CONTENT_LENGTH"] = 100
 
     parent = Blueprint("parent", __name__)
@@ -300,3 +310,136 @@ def test_nested_blueprint_max_content_length(app: Flask, client: FlaskClient) ->
     assert response.status_code == 200
     response = client.post("/p/c/gc/custom", data="x" * 350)
     assert response.status_code == 413
+
+
+def test_nested_blueprint_innermost_priority(app: Flask, client: FlaskClient) -> None:
+    """Test that innermost blueprint has higher priority than outer ones.
+
+    Critical test: This ensures that the innermost (most specific) blueprint's
+    max_content_length takes precedence over outer blueprints.
+
+    If the implementation incorrectly iterates from outer to inner (e.g., using
+    reversed()), this test will fail because:
+    - parent.max_content_length = 150 would be used instead of child.max_content_length = 200
+    - grandchild.max_content_length = 250 would be used instead of child.max_content_length = 200
+
+    Expected behavior:
+    - child_only route uses child's 200 (not parent's 150)
+    - grandchild_only route uses grandchild's 250 (not child's 200 or parent's 150)
+    """
+    app.config["MAX_CONTENT_LENGTH"] = 100
+
+    parent = Blueprint("parent", __name__)
+    parent.max_content_length = 150
+
+    child = Blueprint("child", __name__)
+    child.max_content_length = 200
+
+    grandchild = Blueprint("grandchild", __name__)
+    grandchild.max_content_length = 250
+
+    @child.post("/child_only")
+    def child_only():
+        return str(len(request.get_data()))
+
+    @grandchild.post("/grandchild_only")
+    def grandchild_only():
+        return str(len(request.get_data()))
+
+    child.register_blueprint(grandchild, url_prefix="/gc")
+    parent.register_blueprint(child, url_prefix="/c")
+    app.register_blueprint(parent, url_prefix="/p")
+
+    @app.errorhandler(413)
+    def handle_too_large(e):
+        return "Too large", 413
+
+    response = client.post("/p/c/child_only", data="x" * 180)
+    assert response.status_code == 200, (
+        "child_only should use child's 200 limit, not parent's 150. "
+        "If this fails, the implementation may be iterating blueprints in wrong order."
+    )
+
+    response = client.post("/p/c/child_only", data="x" * 220)
+    assert response.status_code == 413, (
+        "220 bytes should exceed child's 200 limit."
+    )
+
+    response = client.post("/p/c/gc/grandchild_only", data="x" * 240)
+    assert response.status_code == 200, (
+        "grandchild_only should use grandchild's 250 limit, not child's 200. "
+        "If this fails, the implementation may be iterating blueprints in wrong order."
+    )
+
+    response = client.post("/p/c/gc/grandchild_only", data="x" * 260)
+    assert response.status_code == 413, (
+        "260 bytes should exceed grandchild's 250 limit."
+    )
+
+
+def test_nested_blueprint_skip_none_values(app: Flask, client: FlaskClient) -> None:
+    """Test that blueprints with max_content_length=None are skipped.
+
+    When an inner blueprint doesn't have max_content_length set (None),
+    the implementation should look for the closest ancestor that has it set.
+
+    Scenarios tested:
+    1. grandchild=None, child=200, parent=150 -> should use child's 200
+    2. grandchild=None, child=None, parent=150 -> should use parent's 150
+    """
+    app.config["MAX_CONTENT_LENGTH"] = 100
+
+    parent = Blueprint("parent", __name__)
+    parent.max_content_length = 150
+
+    child = Blueprint("child", __name__)
+    child.max_content_length = 200
+
+    grandchild_no_setting = Blueprint("gc_no_setting", __name__)
+
+    parent2 = Blueprint("parent2", __name__)
+    parent2.max_content_length = 150
+
+    child2 = Blueprint("child2", __name__)
+
+    grandchild2 = Blueprint("grandchild2", __name__)
+
+    @grandchild_no_setting.post("/route")
+    def gc_route():
+        return str(len(request.get_data()))
+
+    @grandchild2.post("/route")
+    def gc2_route():
+        return str(len(request.get_data()))
+
+    child.register_blueprint(grandchild_no_setting, url_prefix="/gc")
+    parent.register_blueprint(child, url_prefix="/c")
+    app.register_blueprint(parent, url_prefix="/p")
+
+    child2.register_blueprint(grandchild2, url_prefix="/gc")
+    parent2.register_blueprint(child2, url_prefix="/c")
+    app.register_blueprint(parent2, url_prefix="/p2")
+
+    @app.errorhandler(413)
+    def handle_too_large(e):
+        return "Too large", 413
+
+    response = client.post("/p/c/gc/route", data="x" * 190)
+    assert response.status_code == 200, (
+        "Should use child's 200 limit when grandchild has no setting."
+    )
+
+    response = client.post("/p/c/gc/route", data="x" * 210)
+    assert response.status_code == 413, (
+        "210 bytes should exceed child's 200 limit."
+    )
+
+    response = client.post("/p2/c/gc/route", data="x" * 140)
+    assert response.status_code == 200, (
+        "Should use parent's 150 limit when child and grandchild have no setting."
+    )
+
+    response = client.post("/p2/c/gc/route", data="x" * 160)
+    assert response.status_code == 413, (
+        "160 bytes should exceed parent's 150 limit."
+    )
