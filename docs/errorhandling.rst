@@ -136,6 +136,33 @@ codes. Handlers can be registered for a specific class, or for all subclasses
 of a parent class.
 
 
+Registering Multiple Exceptions
+```````````````````````````````
+
+You can register a single handler for multiple exception types or HTTP status
+codes at once by passing a sequence (list or tuple) to ``errorhandler`` or
+``register_error_handler``. This is useful when multiple errors should be
+handled the same way.
+
+.. code-block:: python
+
+    @app.errorhandler([404, 405])
+    def handle_not_found_or_method_not_allowed(e):
+        return 'The requested resource was not found or the method is not allowed.', 404
+
+    @app.errorhandler([ValueError, TypeError])
+    def handle_input_errors(e):
+        return 'Invalid input provided.', 400
+
+    # or, without the decorator
+    app.register_error_handler([404, 405], handle_not_found_or_method_not_allowed)
+
+This is equivalent to registering the handler for each exception type or code
+individually. The same matching rules apply: more specific exception classes
+take precedence over more general ones, and later registrations override
+earlier ones for the same exception class or code.
+
+
 Handling
 ````````
 

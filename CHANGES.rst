@@ -16,6 +16,21 @@ Unreleased
     deprecation period. :issue:`5815`
 -   ``template_filter``, ``template_test``, and ``template_global`` decorators
     can be used without parentheses. :issue:`5729`
+-   ``@app.errorhandler``, ``app.register_error_handler``, and
+    ``@bp.app_errorhandler`` now accept a sequence of multiple exception types
+    or HTTP status codes, allowing a single handler to be registered for
+    multiple exceptions at once. For example::
+
+        @app.errorhandler([404, 405])
+        def handle_not_found_or_method_not_allowed(e):
+            return 'Not Found or Method Not Allowed', 404
+
+    The matching priority rules are explicitly documented: more specific
+    exception classes take precedence over more general ones, HTTP status
+    code handlers take precedence over exception class handlers for
+    ``HTTPException`` subclasses, blueprint handlers take precedence over
+    app handlers for matching requests, and later registrations override
+    earlier ones for the same exception class or code. :issue:`TBD`
 
 
 Version 3.1.2

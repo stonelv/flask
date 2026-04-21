@@ -596,7 +596,8 @@ class Scaffold:
 
     @setupmethod
     def errorhandler(
-        self, code_or_exception: type[Exception] | int
+        self,
+        code_or_exception: type[Exception] | int | t.Sequence[type[Exception] | int],
     ) -> t.Callable[[T_error_handler], T_error_handler]:
         """Register a function to handle errors by code or exception class.
 
@@ -613,10 +614,25 @@ class Scaffold:
             def special_exception_handler(error):
                 return 'Database connection failed', 500
 
+        You can also register a handler for multiple exception types or
+        error codes at once by passing a sequence::
+
+            @app.errorhandler([404, 405])
+            def handle_not_found_or_method_not_allowed(error):
+                return 'Not Found or Method Not Allowed', 404
+
+            @app.errorhandler([ValueError, TypeError])
+            def handle_value_or_type_error(error):
+                return 'Invalid input', 400
+
         This is available on both app and blueprint objects. When used on an app, this
         can handle errors from every request. When used on a blueprint, this can handle
         errors from requests that the blueprint handles. To register with a blueprint
         and affect every request, use :meth:`.Blueprint.app_errorhandler`.
+
+        .. versionchanged:: 3.1
+            Added support for registering a handler for multiple exception
+            types or error codes at once by passing a sequence.
 
         .. versionadded:: 0.7
             Use :meth:`register_error_handler` instead of modifying
@@ -629,11 +645,18 @@ class Scaffold:
            :class:`~werkzeug.exceptions.HTTPException` class.
 
         :param code_or_exception: the code as integer for the handler, or
-                                  an arbitrary exception
+                                  an arbitrary exception class, or a sequence
+                                  of multiple codes or exception classes
         """
+        codes_or_exceptions: t.Sequence[type[Exception] | int]
+        if isinstance(code_or_exception, (type, int)):
+            codes_or_exceptions = [code_or_exception]
+        else:
+            codes_or_exceptions = code_or_exception
 
         def decorator(f: T_error_handler) -> T_error_handler:
-            self.register_error_handler(code_or_exception, f)
+            for coe in codes_or_exceptions:
+                self.register_error_handler(coe, f)
             return f
 
         return decorator
@@ -641,17 +664,33 @@ class Scaffold:
     @setupmethod
     def register_error_handler(
         self,
-        code_or_exception: type[Exception] | int,
+        code_or_exception: type[Exception] | int | t.Sequence[type[Exception] | int],
         f: ft.ErrorHandlerCallable,
     ) -> None:
         """Alternative error attach function to the :meth:`errorhandler`
         decorator that is more straightforward to use for non decorator
         usage.
 
+        You can also register a handler for multiple exception types or
+        error codes at once by passing a sequence::
+
+            app.register_error_handler([404, 405], handle_not_found)
+            app.register_error_handler([ValueError, TypeError], handle_input_error)
+
+        .. versionchanged:: 3.1
+            Added support for registering a handler for multiple exception
+            types or error codes at once by passing a sequence.
+
         .. versionadded:: 0.7
         """
-        exc_class, code = self._get_exc_class_and_code(code_or_exception)
-        self.error_handler_spec[None][code][exc_class] = f
+        if isinstance(code_or_exception, (type, int)):
+            codes_or_exceptions = [code_or_exception]
+        else:
+            codes_or_exceptions = code_or_exception
+
+        for coe in codes_or_exceptions:
+            exc_class, code = self._get_exc_class_and_code(coe)
+            self.error_handler_spec[None][code][exc_class] = f
 
     @staticmethod
     def _get_exc_class_and_code(
