@@ -293,3 +293,289 @@ class TestGenericHandlers:
         assert client.get("/error").data == b"direct KeyError"
         assert client.get("/abort").data == b"direct InternalServerError"
         assert client.get("/not-found").data == b"direct NotFound"
+
+
+class TestMultipleErrorHandlers:
+    """Test registering handlers for multiple exception types or codes at once."""
+
+    def test_errorhandler_multiple_exceptions(self, app):
+        """Test @app.errorhandler with multiple exception types."""
+
+        class ExceptionA(Exception):
+            pass
+
+        class ExceptionB(Exception):
+            pass
+
+        class ExceptionC(Exception):
+            pass
+
+        @app.errorhandler([ExceptionA, ExceptionB])
+        def handle_a_and_b(e):
+            return f"handled {type(e).__name__}"
+
+        @app.errorhandler(ExceptionC)
+        def handle_c(e):
+            return "handled ExceptionC"
+
+        @app.route("/a")
+        def raise_a():
+            raise ExceptionA()
+
+        @app.route("/b")
+        def raise_b():
+            raise ExceptionB()
+
+        @app.route("/c")
+        def raise_c():
+            raise ExceptionC()
+
+        c = app.test_client()
+        assert c.get("/a").data == b"handled ExceptionA"
+        assert c.get("/b").data == b"handled ExceptionB"
+        assert c.get("/c").data == b"handled ExceptionC"
+
+    def test_errorhandler_multiple_codes(self, app):
+        """Test @app.errorhandler with multiple HTTP status codes."""
+        from werkzeug.exceptions import MethodNotAllowed
+        from werkzeug.exceptions import NotFound
+
+        @app.errorhandler([404, 405])
+        def handle_404_and_405(e):
+            return f"error {e.code}", e.code
+
+        @app.errorhandler(500)
+        def handle_500(e):
+            return "error 500", 500
+
+        @app.route("/test")
+        def test_route():
+            return "ok"
+
+        c = app.test_client()
+        response = c.get("/not-found")
+        assert response.status_code == 404
+        assert response.data == b"error 404"
+
+        response = c.post("/test")
+        assert response.status_code == 405
+        assert response.data == b"error 405"
+
+    def test_register_error_handler_multiple(self, app):
+        """Test register_error_handler with multiple exception types."""
+
+        class ExceptionX(Exception):
+            pass
+
+        class ExceptionY(Exception):
+            pass
+
+        def handle_x_and_y(e):
+            return f"handled {type(e).__name__}"
+
+        app.register_error_handler([ExceptionX, ExceptionY], handle_x_and_y)
+
+        @app.route("/x")
+        def raise_x():
+            raise ExceptionX()
+
+        @app.route("/y")
+        def raise_y():
+            raise ExceptionY()
+
+        c = app.test_client()
+        assert c.get("/x").data == b"handled ExceptionX"
+        assert c.get("/y").data == b"handled ExceptionY"
+
+    def test_blueprint_app_errorhandler_multiple(self, app):
+        """Test Blueprint.app_errorhandler with multiple exception types."""
+        bp = flask.Blueprint("bp", __name__)
+
+        class ExceptionM(Exception):
+            pass
+
+        class ExceptionN(Exception):
+            pass
+
+        @bp.app_errorhandler([ExceptionM, ExceptionN])
+        def handle_m_and_n(e):
+            return f"bp handled {type(e).__name__}"
+
+        @app.route("/m")
+        def raise_m():
+            raise ExceptionM()
+
+        @app.route("/n")
+        def raise_n():
+            raise ExceptionN()
+
+        app.register_blueprint(bp)
+
+        c = app.test_client()
+        assert c.get("/m").data == b"bp handled ExceptionM"
+        assert c.get("/n").data == b"bp handled ExceptionN"
+
+
+class TestErrorHandlerPriority:
+    """Test error handler priority and inheritance matching rules."""
+
+    def test_specificity_priority(self, app):
+        """Test that more specific exception classes take precedence."""
+
+        class ParentException(Exception):
+            pass
+
+        class ChildException(ParentException):
+            pass
+
+        @app.errorhandler(ParentException)
+        def handle_parent(e):
+            return "parent"
+
+        @app.errorhandler(ChildException)
+        def handle_child(e):
+            return "child"
+
+        @app.route("/parent")
+        def raise_parent():
+            raise ParentException()
+
+        @app.route("/child")
+        def raise_child():
+            raise ChildException()
+
+        c = app.test_client()
+        assert c.get("/parent").data == b"parent"
+        assert c.get("/child").data == b"child"
+
+    def test_inheritance_matching(self, app):
+        """Test that child exceptions match parent handlers when no specific handler exists."""
+
+        class GrandParentException(Exception):
+            pass
+
+        class ParentException(GrandParentException):
+            pass
+
+        class ChildException(ParentException):
+            pass
+
+        @app.errorhandler(GrandParentException)
+        def handle_grandparent(e):
+            return f"grandparent: {type(e).__name__}"
+
+        @app.route("/grandparent")
+        def raise_grandparent():
+            raise GrandParentException()
+
+        @app.route("/parent")
+        def raise_parent():
+            raise ParentException()
+
+        @app.route("/child")
+        def raise_child():
+            raise ChildException()
+
+        c = app.test_client()
+        assert c.get("/grandparent").data == b"grandparent: GrandParentException"
+        assert c.get("/parent").data == b"grandparent: ParentException"
+        assert c.get("/child").data == b"grandparent: ChildException"
+
+    def test_registration_order_priority(self, app):
+        """Test that later registrations override earlier ones for the same exception."""
+
+        class TestException(Exception):
+            pass
+
+        @app.errorhandler(TestException)
+        def first_handler(e):
+            return "first"
+
+        @app.errorhandler(TestException)
+        def second_handler(e):
+            return "second"
+
+        @app.route("/test")
+        def raise_test():
+            raise TestException()
+
+        c = app.test_client()
+        assert c.get("/test").data == b"second"
+
+    def test_http_code_vs_generic_exception_priority(self, app):
+        """Test that HTTP code handlers take precedence over generic exception handlers.
+
+        When an HTTPException is raised, handlers registered for the specific
+        HTTP status code take precedence over handlers registered for more
+        general exception classes like Exception.
+        """
+        from werkzeug.exceptions import NotFound
+
+        @app.errorhandler(Exception)
+        def handle_generic_exception(e):
+            return "generic exception"
+
+        @app.errorhandler(404)
+        def handle_404(e):
+            return "not found"
+
+        c = app.test_client()
+        assert c.get("/non-existent").data == b"not found"
+
+    def test_blueprint_vs_app_priority(self, app):
+        """Test that blueprint handlers take precedence over app handlers for matching requests."""
+        bp = flask.Blueprint("bp", __name__)
+
+        class TestException(Exception):
+            pass
+
+        @bp.errorhandler(TestException)
+        def bp_handler(e):
+            return "blueprint"
+
+        @app.errorhandler(TestException)
+        def app_handler(e):
+            return "app"
+
+        @bp.route("/test")
+        def bp_route():
+            raise TestException()
+
+        @app.route("/test")
+        def app_route():
+            raise TestException()
+
+        app.register_blueprint(bp, url_prefix="/bp")
+
+        c = app.test_client()
+        assert c.get("/bp/test").data == b"blueprint"
+        assert c.get("/test").data == b"app"
+
+    def test_mixed_specificity_and_registration_order(self, app):
+        """Test that specificity takes precedence over registration order."""
+
+        class ParentException(Exception):
+            pass
+
+        class ChildException(ParentException):
+            pass
+
+        @app.errorhandler(ChildException)
+        def child_handler(e):
+            return "child"
+
+        @app.errorhandler(ParentException)
+        def parent_handler(e):
+            return "parent"
+
+        @app.route("/child")
+        def raise_child():
+            raise ChildException()
+
+        @app.route("/parent")
+        def raise_parent():
+            raise ParentException()
+
+        c = app.test_client()
+        assert c.get("/child").data == b"child"
+        assert c.get("/parent").data == b"parent"

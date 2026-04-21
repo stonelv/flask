@@ -865,10 +865,32 @@ class App(Scaffold):
     def _find_error_handler(
         self, e: Exception, blueprints: list[str]
     ) -> ft.ErrorHandlerCallable | None:
-        """Return a registered error handler for an exception in this order:
-        blueprint handler for a specific code, app handler for a specific code,
-        blueprint handler for an exception class, app handler for an exception
-        class, or ``None`` if a suitable handler is not found.
+        """Return a registered error handler for an exception.
+
+        The matching follows these priority rules:
+
+        1. **Specificity Priority**: Handlers registered for more specific
+           exception classes take precedence over more general ones. This is
+           determined by traversing the exception's method resolution order
+           (``__mro__``), starting from the most specific class.
+
+        2. **HTTP Code Priority**: If the exception is an ``HTTPException``,
+           handlers registered for the specific HTTP status code are checked
+           before handlers registered for the exception class itself.
+
+        3. **Scope Priority**: Blueprint-specific handlers take precedence
+           over application-wide handlers for requests that match the blueprint.
+
+        4. **Registration Order**: If multiple handlers are registered for the
+           same exception class or code, the most recently registered handler
+           takes precedence (last one wins).
+
+        :param e: The exception to find a handler for.
+        :param blueprints: List of blueprint names that match the current request.
+        :return: The matching error handler, or ``None`` if no handler is found.
+
+        .. versionchanged:: 3.1
+            Added explicit documentation of matching priority rules.
         """
         exc_class, code = self._get_exc_class_and_code(type(e))
         names = (*blueprints, None)

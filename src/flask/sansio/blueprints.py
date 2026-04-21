@@ -654,10 +654,14 @@ class Blueprint(Scaffold):
 
     @setupmethod
     def app_errorhandler(
-        self, code: type[Exception] | int
+        self, code: type[Exception] | int | t.Sequence[type[Exception] | int]
     ) -> t.Callable[[T_error_handler], T_error_handler]:
         """Like :meth:`errorhandler`, but for every request, not only those handled by
         the blueprint. Equivalent to :meth:`.Flask.errorhandler`.
+
+        .. versionchanged:: 3.1
+            Added support for registering a handler for multiple exception
+            types or error codes at once by passing a sequence.
         """
 
         def decorator(f: T_error_handler) -> T_error_handler:
