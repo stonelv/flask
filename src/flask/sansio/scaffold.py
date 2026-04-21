@@ -630,7 +630,7 @@ class Scaffold:
         errors from requests that the blueprint handles. To register with a blueprint
         and affect every request, use :meth:`.Blueprint.app_errorhandler`.
 
-        .. versionchanged:: 3.1
+        .. versionchanged:: 3.2
             Added support for registering a handler for multiple exception
             types or error codes at once by passing a sequence.
 
@@ -651,8 +651,22 @@ class Scaffold:
         codes_or_exceptions: t.Sequence[type[Exception] | int]
         if isinstance(code_or_exception, (type, int)):
             codes_or_exceptions = [code_or_exception]
+        elif isinstance(code_or_exception, (str, bytes)):
+            raise TypeError(
+                "Cannot pass a string or bytes as an error code or exception. "
+                "Use an integer code, an exception class, or a sequence of "
+                "codes or exception classes."
+            )
         else:
             codes_or_exceptions = code_or_exception
+
+        for coe in codes_or_exceptions:
+            if not isinstance(coe, (type, int)):
+                raise TypeError(
+                    f"Invalid error handler argument: {coe!r}. "
+                    "Each element in the sequence must be an integer code "
+                    "or an exception class, not a sequence or other type."
+                )
 
         def decorator(f: T_error_handler) -> T_error_handler:
             for coe in codes_or_exceptions:
@@ -677,7 +691,7 @@ class Scaffold:
             app.register_error_handler([404, 405], handle_not_found)
             app.register_error_handler([ValueError, TypeError], handle_input_error)
 
-        .. versionchanged:: 3.1
+        .. versionchanged:: 3.2
             Added support for registering a handler for multiple exception
             types or error codes at once by passing a sequence.
 
@@ -685,10 +699,22 @@ class Scaffold:
         """
         if isinstance(code_or_exception, (type, int)):
             codes_or_exceptions = [code_or_exception]
+        elif isinstance(code_or_exception, (str, bytes)):
+            raise TypeError(
+                "Cannot pass a string or bytes as an error code or exception. "
+                "Use an integer code, an exception class, or a sequence of "
+                "codes or exception classes."
+            )
         else:
             codes_or_exceptions = code_or_exception
 
         for coe in codes_or_exceptions:
+            if not isinstance(coe, (type, int)):
+                raise TypeError(
+                    f"Invalid error handler argument: {coe!r}. "
+                    "Each element in the sequence must be an integer code "
+                    "or an exception class, not a sequence or other type."
+                )
             exc_class, code = self._get_exc_class_and_code(coe)
             self.error_handler_spec[None][code][exc_class] = f
 

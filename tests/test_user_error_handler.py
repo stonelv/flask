@@ -579,3 +579,126 @@ class TestErrorHandlerPriority:
         c = app.test_client()
         assert c.get("/child").data == b"child"
         assert c.get("/parent").data == b"parent"
+
+
+class TestErrorHandlerInputValidation:
+    """Test input validation for error handler registration."""
+
+    def test_errorhandler_rejects_string(self, app):
+        """Test that errorhandler rejects string arguments like "404"."""
+        with pytest.raises(TypeError) as exc_info:
+
+            @app.errorhandler("404")
+            def handle_string(e):
+                return "not found"
+
+        assert "Cannot pass a string or bytes" in str(exc_info.value)
+
+    def test_errorhandler_rejects_bytes(self, app):
+        """Test that errorhandler rejects bytes arguments."""
+        with pytest.raises(TypeError) as exc_info:
+
+            @app.errorhandler(b"404")
+            def handle_bytes(e):
+                return "not found"
+
+        assert "Cannot pass a string or bytes" in str(exc_info.value)
+
+    def test_errorhandler_rejects_invalid_sequence_elements(self, app):
+        """Test that errorhandler rejects sequences with invalid elements."""
+        with pytest.raises(TypeError) as exc_info:
+
+            @app.errorhandler([404, "405"])
+            def handle_mixed(e):
+                return "error"
+
+        assert "Invalid error handler argument" in str(exc_info.value)
+        assert "'405'" in str(exc_info.value)
+
+    def test_errorhandler_rejects_nested_sequences(self, app):
+        """Test that errorhandler rejects nested sequences."""
+        with pytest.raises(TypeError) as exc_info:
+
+            @app.errorhandler([[404], [405]])
+            def handle_nested(e):
+                return "error"
+
+        assert "Invalid error handler argument" in str(exc_info.value)
+        assert "[404]" in str(exc_info.value)
+
+    def test_register_error_handler_rejects_string(self, app):
+        """Test that register_error_handler rejects string arguments."""
+
+        def handler(e):
+            return "error"
+
+        with pytest.raises(TypeError) as exc_info:
+            app.register_error_handler("404", handler)
+
+        assert "Cannot pass a string or bytes" in str(exc_info.value)
+
+    def test_register_error_handler_rejects_invalid_sequence_elements(self, app):
+        """Test that register_error_handler rejects sequences with invalid elements."""
+
+        def handler(e):
+            return "error"
+
+        with pytest.raises(TypeError) as exc_info:
+            app.register_error_handler([ValueError, "typeerror"], handler)
+
+        assert "Invalid error handler argument" in str(exc_info.value)
+
+
+class TestBlueprintAppErrorHandlerMultipleCodes:
+    """Test Blueprint.app_errorhandler with multiple HTTP status codes."""
+
+    def test_blueprint_app_errorhandler_multiple_codes(self, app):
+        """Test bp.app_errorhandler([404, 405]) registers handlers for both codes."""
+        bp = flask.Blueprint("bp", __name__)
+
+        @bp.app_errorhandler([404, 405])
+        def handle_404_and_405(e):
+            return f"bp handled error {e.code}", e.code
+
+        @app.route("/test")
+        def test_route():
+            return "ok"
+
+        app.register_blueprint(bp)
+
+        c = app.test_client()
+
+        response = c.get("/non-existent")
+        assert response.status_code == 404
+        assert response.data == b"bp handled error 404"
+
+        response = c.post("/test")
+        assert response.status_code == 405
+        assert response.data == b"bp handled error 405"
+
+    def test_blueprint_app_errorhandler_mixed_codes_and_exceptions(self, app):
+        """Test bp.app_errorhandler with a mix of codes and exception classes."""
+        bp = flask.Blueprint("bp", __name__)
+
+        class CustomError(Exception):
+            pass
+
+        @bp.app_errorhandler([404, ValueError])
+        def handle_404_and_value_error(e):
+            if hasattr(e, "code"):
+                return f"bp handled HTTP {e.code}"
+            return f"bp handled {type(e).__name__}"
+
+        @app.route("/value-error")
+        def raise_value_error():
+            raise ValueError("test")
+
+        app.register_blueprint(bp)
+
+        c = app.test_client()
+
+        response = c.get("/non-existent")
+        assert response.data == b"bp handled HTTP 404"
+
+        response = c.get("/value-error")
+        assert response.data == b"bp handled ValueError"
