@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import os
 import sys
@@ -22,6 +23,72 @@ from .signals import message_flashed
 
 if t.TYPE_CHECKING:  # pragma: no cover
     from .wrappers import Response
+
+
+_304_ALLOWED_HEADERS = frozenset(
+    [
+        "cache-control",
+        "content-location",
+        "date",
+        "etag",
+        "expires",
+        "last-modified",
+        "vary",
+    ]
+)
+
+
+def _generate_stable_etag(
+    path: str | os.PathLike[str],
+) -> str:
+    """Generate a stable ETag for a file based on its modification time and size.
+    
+    This generates a more stable ETag than Werkzeug's default implementation:
+    - Uses only second-level precision for mtime (avoids filesystem time precision issues)
+    - Does not include inode (avoids issues when files are copied/moved)
+    - Uses a hash of the mtime and size for consistency
+    
+    :param path: The path to the file.
+    :return: A string ETag value (without quotes).
+    """
+    path_str = os.fspath(path)
+    
+    if not os.path.isabs(path_str):
+        ctx = app_ctx._get_current_object()
+        path_str = os.path.join(ctx.app.root_path, path_str)
+    
+    stat = os.stat(path_str)
+    mtime_seconds = int(stat.st_mtime)
+    size = stat.st_size
+    
+    etag_input = f"{mtime_seconds}-{size}"
+    etag_hash = hashlib.md5(etag_input.encode("utf-8")).hexdigest()
+    
+    return etag_hash
+
+
+def _fix_304_response_headers(response: BaseResponse) -> None:
+    """Fix response headers for 304 Not Modified responses.
+    
+    According to RFC 7232 Section 4.1, a 304 response:
+    - MUST include cache validators: ETag, Last-Modified
+    - MUST include: Cache-Control, Content-Location, Date, Expires, Vary
+    - MUST NOT include entity headers: Content-Type, Content-Length, 
+      Content-Encoding, Content-Disposition, etc.
+    
+    :param response: The response object to modify.
+    """
+    if response.status_code != 304:
+        return
+    
+    headers_to_remove = []
+    for header_name, _ in response.headers:
+        header_lower = header_name.lower()
+        if header_lower not in _304_ALLOWED_HEADERS:
+            headers_to_remove.append(header_name)
+    
+    for header in headers_to_remove:
+        response.headers.remove(header)
 
 
 def get_debug_flag() -> bool:
@@ -509,7 +576,10 @@ def send_file(
 
     .. versionadded:: 0.2
     """
-    return werkzeug.utils.send_file(  # type: ignore[return-value]
+    if etag is True and isinstance(path_or_file, (str, os.PathLike)):
+        etag = _generate_stable_etag(path_or_file)
+    
+    response = werkzeug.utils.send_file(  # type: ignore[return-value]
         **_prepare_send_file_kwargs(
             path_or_file=path_or_file,
             environ=request.environ,
@@ -522,6 +592,10 @@ def send_file(
             max_age=max_age,
         )
     )
+    
+    _fix_304_response_headers(response)
+    
+    return response
 
 
 def send_from_directory(
@@ -563,9 +637,20 @@ def send_from_directory(
 
     .. versionadded:: 0.5
     """
-    return werkzeug.utils.send_from_directory(  # type: ignore[return-value]
-        directory, path, **_prepare_send_file_kwargs(**kwargs)
-    )
+    filename = werkzeug.security.safe_join(directory, path)
+    
+    if filename is None:
+        werkzeug.exceptions.abort(404)
+    
+    filename_str = os.fspath(filename)
+    if not os.path.isabs(filename_str):
+        ctx = app_ctx._get_current_object()
+        filename_str = os.path.join(ctx.app.root_path, filename_str)
+    
+    if not os.path.isfile(filename_str):
+        werkzeug.exceptions.abort(404)
+    
+    return send_file(filename, **kwargs)
 
 
 def get_root_path(import_name: str) -> str:
