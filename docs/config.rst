@@ -326,14 +326,17 @@ The following configuration values are used internally by Flask:
     ``Content-Length`` header and the WSGI server does not indicate that it
     terminates the stream, then no data is read to avoid an infinite stream.
 
-    Each request defaults to this config. It can be set on a specific
-    :attr:`.Request.max_content_length` to apply the limit to that specific
-    view. This should be set appropriately based on an application's or view's
-    specific needs.
+    Each request defaults to this config. It can also be set per-blueprint
+    using :attr:`.Blueprint.max_content_length`, or per-route using the
+    ``max_content_length`` parameter to :meth:`.Flask.route` or
+    :meth:`.Blueprint.route`. The priority is: per-route > per-blueprint > global config.
 
     Default: ``None``
 
     .. versionadded:: 0.6
+
+    .. versionchanged:: 3.2
+        Added per-route and per-blueprint ``max_content_length`` support.
 
 .. py:data:: MAX_FORM_MEMORY_SIZE
 

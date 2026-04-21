@@ -158,8 +158,48 @@ parent will trigger for the child. If a child does not have an error
 handler that can handle a given exception, the parent's will be tried.
 
 
-Blueprint Resources
--------------------
+Blueprint Max Content Length
+----------------------------
+
+.. versionadded:: 3.2
+
+Blueprints support setting a ``max_content_length`` attribute that limits the
+size of request bodies for all routes in the blueprint. This overrides the
+global :data:`MAX_CONTENT_LENGTH` config. The limit can be further overridden
+per-route using the ``max_content_length`` parameter to :meth:`~Blueprint.route`.
+
+The priority for max content length is:
+
+1. Per-route ``max_content_length`` parameter
+2. Blueprint :attr:`~Blueprint.max_content_length` attribute
+3. Global :data:`MAX_CONTENT_LENGTH` config
+
+For nested blueprints, the innermost (most specific) blueprint that has
+``max_content_length`` set will take precedence over its parents.
+
+Example usage::
+
+    from flask import Blueprint
+
+    api = Blueprint('api', __name__)
+    api.max_content_length = 16 * 1000 * 1000  # 16 MB
+
+    @api.route('/upload', methods=['POST'])
+    def upload():
+        # Uses blueprint's 16 MB limit
+        return 'Uploaded'
+
+    @api.route('/large', methods=['POST'], max_content_length=64 * 1000 * 1000)
+    def large_upload():
+        # Uses route-specific 64 MB limit
+        return 'Uploaded large file'
+
+If a request body exceeds the limit, a 413
+:exc:`~werkzeug.exceptions.RequestEntityTooLarge` error is raised.
+
+
+Blueprint Error Handlers
+------------------------
 
 Blueprints can provide resources as well.  Sometimes you might want to
 introduce a blueprint only for the resources it provides.
