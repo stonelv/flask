@@ -1057,46 +1057,93 @@ def shell_command() -> None:
     ),
 )
 @click.option("--all-methods", is_flag=True, help="Show HEAD and OPTIONS methods.")
+@click.option(
+    "--format",
+    "-f",
+    type=click.Choice(("text", "json")),
+    default="text",
+    help="Output format. 'text' for human-readable table, 'json' for machine-readable output.",
+)
 @with_appcontext
-def routes_command(sort: str, all_methods: bool) -> None:
+def routes_command(sort: str, all_methods: bool, format: str) -> None:
     """Show all registered routes with endpoints and methods."""
     rules = list(current_app.url_map.iter_rules())
 
     if not rules:
-        click.echo("No routes were registered.")
+        if format == "json":
+            click.echo("[]")
+        else:
+            click.echo("No routes were registered.")
         return
 
     ignored_methods = set() if all_methods else {"HEAD", "OPTIONS"}
     host_matching = current_app.url_map.host_matching
     has_domain = any(rule.host if host_matching else rule.subdomain for rule in rules)
-    rows = []
 
+    route_data = []
     for rule in rules:
+        methods = sorted((rule.methods or set()) - ignored_methods)
+        domain = (rule.host if host_matching else rule.subdomain) or None
+
+        route_info = {
+            "endpoint": rule.endpoint,
+            "methods": methods,
+            "rule": rule.rule,
+            "host_matching": host_matching,
+        }
+
+        if has_domain:
+            if host_matching:
+                route_info["host"] = domain
+            else:
+                route_info["subdomain"] = domain
+
+        if rule.defaults:
+            route_info["defaults"] = rule.defaults
+
+        route_data.append(route_info)
+
+    if sort == "match":
+        pass
+    elif sort == "endpoint":
+        route_data.sort(key=lambda r: r["endpoint"])
+    elif sort == "methods":
+        route_data.sort(key=lambda r: ", ".join(r["methods"]))
+    elif sort == "domain":
+        if has_domain:
+            key = "host" if host_matching else "subdomain"
+            route_data.sort(key=lambda r: r.get(key) or "")
+    elif sort == "rule":
+        route_data.sort(key=lambda r: r["rule"])
+
+    if format == "json":
+        import json
+
+        click.echo(json.dumps(route_data, sort_keys=False))
+        return
+
+    rows = []
+    for info in route_data:
         row = [
-            rule.endpoint,
-            ", ".join(sorted((rule.methods or set()) - ignored_methods)),
+            info["endpoint"],
+            ", ".join(info["methods"]),
         ]
 
         if has_domain:
-            row.append((rule.host if host_matching else rule.subdomain) or "")
+            if host_matching:
+                row.append(info.get("host") or "")
+            else:
+                row.append(info.get("subdomain") or "")
 
-        row.append(rule.rule)
+        row.append(info["rule"])
         rows.append(row)
 
     headers = ["Endpoint", "Methods"]
-    sorts = ["endpoint", "methods"]
 
     if has_domain:
         headers.append("Host" if host_matching else "Subdomain")
-        sorts.append("domain")
 
     headers.append("Rule")
-    sorts.append("rule")
-
-    try:
-        rows.sort(key=itemgetter(sorts.index(sort)))
-    except ValueError:
-        pass
 
     rows.insert(0, headers)
     widths = [max(len(row[i]) for row in rows) for i in range(len(headers))]
