@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN" {% if session.theme == 'dark' %}class="dark-theme"{% endif %}>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文章列表</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>文章列表</h1>
+            <div class="header-actions">
+                <a href="{{ url_for('articles.toggle_theme') }}" class="btn btn-secondary">
+                    {% if session.theme == 'dark' %}切换到亮色主题{% else %}切换到暗色主题{% endif %}
+                </a>
+                <a href="{{ url_for('auth.login') }}" class="btn btn-primary">后台管理</a>
+            </div>
+        </header>
+
+        <div class="article-list">
+            {% for article in articles %} 
+                <article class="article-card">
+                    <h2><a href="{{ url_for('articles.public_show', id=article.id) }}">{{ article.title }}</a></h2>
+                    <div class="article-meta">
+                        <span>发布时间: {{ article.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+                        <span>更新时间: {{ article.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+                    </div>
+                    <p class="article-excerpt">{% if article.content|length > 200 %}{{ article.content[:200] }}... <a href="{{ url_for('articles.public_show', id=article.id) }}">阅读全文</a>{% else %}{{ article.content }}{% endif %}</p>
+                </article>
+            {% else %} 
+                <p>暂无已发布的文章。</p>
+            {% endfor %} 
+        </div>
+
+        <!-- 分页 -->
+        {% if pagination.pages > 1 %} 
+            <div class="pagination">
+                {% if pagination.has_prev %} 
+                    <a href="{{ url_for('articles.public_index', page=pagination.prev_num) }}" class="btn btn-sm btn-secondary">&laquo; 上一页</a>
+                {% endif %} 
+
+                {% for page_num in pagination.iter_pages() %} 
+                    {% if page_num %} 
+                        {% if page_num == pagination.page %} 
+                            <span class="current-page">{{ page_num }}</span>
+                        {% else %} 
+                            <a href="{{ url_for('articles.public_index', page=page_num) }}" class="btn btn-sm btn-secondary">{{ page_num }}</a>
+                        {% endif %} 
+                    {% else %} 
+                        <span class="ellipsis">...</span>
+                    {% endif %} 
+                {% endfor %} 
+
+                {% if pagination.has_next %} 
+                    <a href="{{ url_for('articles.public_index', page=pagination.next_num) }}" class="btn btn-sm btn-secondary">下一页 &raquo;</a>
+                {% endif %} 
+            </div>
+        {% endif %} 
+    </div>
+</body>
+</html>
