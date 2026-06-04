@@ -344,3 +344,183 @@ def test_html_method():
 
     result = json.dumps(ObjectWithHTML())
     assert result == '"<p>test</p>"'
+
+
+class TestPrettyPrint:
+    """Test the optional pretty-print feature for JSON responses.
+
+    When a request includes ?pretty=1 query parameter or X-Flask-Pretty: 1 header,
+    the JSON response should be indented with sorted keys.
+    """
+
+    def test_pretty_query_param_dict_view(self, app, client):
+        """Test pretty-print with ?pretty=1 query parameter when view returns dict."""
+
+        @app.route("/dict")
+        def return_dict():
+            return {"z": 1, "a": 2, "m": 3}
+
+        rv = client.get("/dict")
+        assert b"\n" not in rv.data.strip() or b"  " not in rv.data
+
+        rv = client.get("/dict?pretty=1")
+        data = rv.data.decode()
+        assert "  " in data
+        assert '"a": 2' in data
+        assert '"m": 3' in data
+        assert '"z": 1' in data
+
+    def test_pretty_query_param_list_view(self, app, client):
+        """Test pretty-print with ?pretty=1 query parameter when view returns list."""
+
+        @app.route("/list")
+        def return_list():
+            return [{"z": 1, "a": 2}, "b", "c"]
+
+        rv = client.get("/list?pretty=1")
+        data = rv.data.decode()
+        assert "  " in data
+
+    def test_pretty_query_param_jsonify(self, app, client):
+        """Test pretty-print with ?pretty=1 query parameter when using jsonify."""
+
+        @app.route("/jsonify")
+        def use_jsonify():
+            return flask.jsonify(z=1, a=2, m=3)
+
+        rv = client.get("/jsonify?pretty=1")
+        data = rv.data.decode()
+        assert "  " in data
+
+    def test_pretty_header(self, app, client):
+        """Test pretty-print with X-Flask-Pretty: 1 header."""
+
+        @app.route("/dict")
+        def return_dict():
+            return {"z": 1, "a": 2, "m": 3}
+
+        rv = client.get("/dict", headers={"X-Flask-Pretty": "1"})
+        data = rv.data.decode()
+        assert "  " in data
+
+    def test_pretty_blueprint(self, app, client):
+        """Test pretty-print works with blueprint views."""
+        from flask import Blueprint
+
+        bp = Blueprint("test", __name__)
+
+        @bp.route("/data")
+        def return_data():
+            return {"z": 1, "a": 2}
+
+        app.register_blueprint(bp, url_prefix="/api")
+
+        rv = client.get("/api/data?pretty=1")
+        data = rv.data.decode()
+        assert "  " in data
+
+    @pytest.mark.parametrize("value", ["1", "true", "True", "TRUE", "yes", "Yes", "on", "On"])
+    def test_pretty_truthy_values(self, app, client, value):
+        """Test pretty-print is enabled for various truthy values."""
+
+        @app.route("/dict")
+        def return_dict():
+            return {"z": 1, "a": 2}
+
+        rv = client.get(f"/dict?pretty={value}")
+        data = rv.data.decode()
+        assert "  " in data
+
+        rv = client.get("/dict", headers={"X-Flask-Pretty": value})
+        data = rv.data.decode()
+        assert "  " in data
+
+    @pytest.mark.parametrize("value", ["0", "false", "False", "no", "No", "off", "Off", ""])
+    def test_pretty_falsy_values(self, app, client, value):
+        """Test pretty-print is NOT enabled for falsy values."""
+
+        @app.route("/dict")
+        def return_dict():
+            return {"z": 1, "a": 2}
+
+        rv = client.get(f"/dict?pretty={value}")
+        data = rv.data.decode()
+        assert "  " not in data or '"z": 1' not in data
+
+    def test_pretty_sort_keys_always_enabled(self, app, client):
+        """Test that sort_keys is always enabled when pretty-print is requested."""
+        app.json.sort_keys = False
+
+        @app.route("/dict")
+        def return_dict():
+            return {"z": 1, "a": 2, "m": 3}
+
+        rv = client.get("/dict?pretty=1")
+        data = rv.data.decode()
+        lines = [line.strip() for line in data.strip().splitlines()]
+        assert '"a": 2' in lines
+        assert '"m": 3' in lines
+        assert '"z": 1' in lines
+        a_index = next(i for i, line in enumerate(lines) if '"a": 2' in line)
+        m_index = next(i for i, line in enumerate(lines) if '"m": 3' in line)
+        z_index = next(i for i, line in enumerate(lines) if '"z": 1' in line)
+        assert a_index < m_index < z_index
+
+    def test_default_behavior_unchanged(self, app, client):
+        """Test that default behavior (without pretty parameter) is unchanged."""
+        app.debug = False
+        app.json.compact = True
+
+        @app.route("/dict")
+        def return_dict():
+            return {"z": 1, "a": 2}
+
+        rv = client.get("/dict")
+        data = rv.data.decode()
+        assert "  " not in data
+        assert b"\n" not in rv.data.strip()
+
+    def test_no_request_context_still_compact(self, app, app_ctx):
+        """Test that without request context, response is still compact."""
+        rv = app.json.response({"z": 1, "a": 2})
+        data = rv.data.decode()
+        assert "  " not in data
+
+    def test_debug_mode_still_works(self, app, client):
+        """Test that debug mode still causes pretty-printing."""
+        app.debug = True
+        app.json.compact = None
+
+        @app.route("/dict")
+        def return_dict():
+            return {"z": 1, "a": 2}
+
+        rv = client.get("/dict")
+        data = rv.data.decode()
+        assert "  " in data
+
+    def test_compact_false_still_works(self, app, client):
+        """Test that compact=False still causes pretty-printing."""
+        app.debug = False
+        app.json.compact = False
+
+        @app.route("/dict")
+        def return_dict():
+            return {"z": 1, "a": 2}
+
+        rv = client.get("/dict")
+        data = rv.data.decode()
+        assert "  " in data
+
+    def test_pretty_overrides_compact_true(self, app, client):
+        """Test that pretty parameter overrides compact=True."""
+        app.debug = False
+        app.json.compact = True
+
+        @app.route("/dict")
+        def return_dict():
+            return {"z": 1, "a": 2}
+
+        rv = client.get("/dict?pretty=1")
+        data = rv.data.decode()
+        assert "  " in data

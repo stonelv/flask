@@ -10,6 +10,9 @@ from datetime import date
 
 from werkzeug.http import http_date
 
+from ..ctx import has_request_context
+from ..globals import request
+
 if t.TYPE_CHECKING:  # pragma: no cover
     from werkzeug.sansio.response import Response
 
@@ -186,14 +189,36 @@ class DefaultJSONProvider(JSONProvider):
         """
         return json.loads(s, **kwargs)
 
+    def _should_pretty_print(self) -> bool:
+        """Check if pretty-print should be enabled based on request parameters.
+
+        Returns ``True`` if the request contains ``?pretty=1`` query parameter
+        or ``X-Flask-Pretty: 1`` header.
+        """
+        if not has_request_context():
+            return False
+
+        pretty_param = request.args.get("pretty")
+        pretty_header = request.headers.get("X-Flask-Pretty")
+
+        for value in (pretty_param, pretty_header):
+            if value is not None:
+                value_lower = value.lower()
+                if value_lower in {"1", "true", "yes", "on"}:
+                    return True
+
+        return False
+
     def response(self, *args: t.Any, **kwargs: t.Any) -> Response:
         """Serialize the given arguments as JSON, and return a
         :class:`~flask.Response` object with it. The response mimetype
         will be "application/json" and can be changed with
         :attr:`mimetype`.
 
-        If :attr:`compact` is ``False`` or debug mode is enabled, the
-        output will be formatted to be easier to read.
+        If :attr:`compact` is ``False``, debug mode is enabled, or the
+        request contains ``?pretty=1`` query parameter or ``X-Flask-Pretty: 1``
+        header, the output will be formatted with indentation and sorted keys
+        to be easier to read.
 
         Either positional or keyword arguments can be given, not both.
         If no arguments are given, ``None`` is serialized.
@@ -201,12 +226,20 @@ class DefaultJSONProvider(JSONProvider):
         :param args: A single value to serialize, or multiple values to
             treat as a list to serialize.
         :param kwargs: Treat as a dict to serialize.
+
+        .. versionchanged:: 3.1
+            Added support for ``?pretty=1`` query parameter and
+            ``X-Flask-Pretty: 1`` header to enable pretty-printing.
         """
         obj = self._prepare_response_obj(args, kwargs)
         dump_args: dict[str, t.Any] = {}
 
-        if (self.compact is None and self._app.debug) or self.compact is False:
+        should_pretty = self._should_pretty_print()
+
+        if should_pretty or (self.compact is None and self._app.debug) or self.compact is False:
             dump_args.setdefault("indent", 2)
+            if should_pretty:
+                dump_args.setdefault("sort_keys", True)
         else:
             dump_args.setdefault("separators", (",", ":"))
 
