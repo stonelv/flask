@@ -1,0 +1,80 @@
+{
+  "tasks": {
+    "my_interval_task": {
+      "name": "my_interval_task",
+      "task_type": "interval",
+      "description": "每10秒执行一次的示例任务",
+      "enabled": true,
+      "max_retries": 0,
+      "status": "running",
+      "next_run_at": "2025-11-29T16:29:22.726870",
+      "last_run_at": "2025-11-29T16:29:12.726866",
+      "current_run_id": "b54cbc4b-0f8a-4f8a-bc45-cc46744c0a4a",
+      "last_error": null,
+      "retry_count": 0,
+      "metrics": {
+        "total_runs": 8,
+        "successful_runs": 8,
+        "failed_runs": 0,
+        "last_run_at": "2025-11-29T16:29:12.733801",
+        "last_success_at": "2025-11-29T16:29:12.733804",
+        "last_failure_at": null,
+        "average_duration": 0.0033875390625,
+        "last_duration": 0.005501,
+        "last_duration_ms": 5,
+        "last_error": null
+      }
+    },
+    "my_delay_task": {
+      "name": "my_delay_task",
+      "task_type": "delay",
+      "description": "延迟5秒后执行的示例任务",
+      "enabled": false,
+      "max_retries": 0,
+      "status": "success",
+      "next_run_at": null,
+      "last_run_at": "2025-11-29T16:28:07.462219",
+      "current_run_id": null,
+      "last_error": null,
+      "retry_count": 0,
+      "metrics": {
+        "total_runs": 1,
+        "successful_runs": 1,
+        "failed_runs": 0,
+        "last_run_at": "2025-11-29T16:28:07.466427",
+        "last_success_at": "2025-11-29T16:28:07.466431",
+        "last_failure_at": null,
+        "average_duration": 0.002278,
+        "last_duration": 0.002278,
+        "last_duration_ms": 2,
+        "last_error": null
+      }
+    },
+    "my_cron_task": {
+      "name": "my_cron_task",
+      "task_type": "cron",
+      "description": "每2分钟执行一次的cron任务",
+      "enabled": true,
+      "max_retries": 0,
+      "status": "success",
+      "next_run_at": "2025-11-29T16:30:00",
+      "last_run_at": "2025-11-29T16:28:59.705109",
+      "current_run_id": null,
+      "last_error": null,
+      "retry_count": 0,
+      "metrics": {
+        "total_runs": 57,
+        "successful_runs": 57,
+        "failed_runs": 0,
+        "last_run_at": "2025-11-29T16:28:59.706942",
+        "last_success_at": "2025-11-29T16:28:59.706946",
+        "last_failure_at": null,
+        "average_duration": 0.000666208227568119,
+        "last_duration": 0.000567,
+        "last_duration_ms": 0,
+        "last_error": null
+      }
+    }
+  },
+  "last_updated": "2025-11-29T16:29:12.733931"
+}
