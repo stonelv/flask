@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+
+{% block title %}文章列表{% endblock %}
+
+{% block content %}
+<div class="front-header">
+    <h1>文章列表</h1>
+</div>
+
+<div class="articles-grid">
+    {% for article in pagination.items %}
+        <article class="article-card">
+            <h2><a href="{{ url_for('articles.detail', article_id=article.id) }}">{{ article.title }}</a></h2>
+            <div class="article-meta">
+                <time datetime="{{ article.created_at.isoformat() }}">{{ article.created_at.strftime('%Y-%m-%d') }}</time>
+            </div>
+            <p class="article-excerpt">{{ article.content[:200] }}{% if article.content|length > 200 %}...{% endif %}</p>
+            <a href="{{ url_for('articles.detail', article_id=article.id) }}" class="btn btn-primary">阅读全文</a>
+        </article>
+    {% else %}
+        <div class="empty">暂无已发布文章</div>
+    {% endfor %}
+</div>
+
+<div class="pagination">
+    {% if pagination.has_prev %}
+        <a href="{{ url_for('articles.index', page=pagination.prev_num) }}" class="page-link">上一页</a>
+    {% endif %}
+    
+    {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+        {% if page_num %}
+            {% if pagination.page == page_num %}
+                <span class="page-link active">{{ page_num }}</span>
+            {% else %}
+                <a href="{{ url_for('articles.index', page=page_num) }}" class="page-link">{{ page_num }}</a>
+            {% endif %}
+        {% else %}
+            <span class="page-link disabled">...</span>
+        {% endif %}
+    {% endfor %}
+    
+    {% if pagination.has_next %}
+        <a href="{{ url_for('articles.index', page=pagination.next_num) }}" class="page-link">下一页</a>
+    {% endif %}
+</div>
+{% endblock %}
