@@ -32,6 +32,9 @@ T_teardown = t.TypeVar("T_teardown", bound=ft.TeardownCallable)
 T_template_context_processor = t.TypeVar(
     "T_template_context_processor", bound=ft.TemplateContextProcessorCallable
 )
+T_request_context_var_processor = t.TypeVar(
+    "T_request_context_var_processor", bound=ft.RequestContextVarProcessorCallable
+)
 T_url_defaults = t.TypeVar("T_url_defaults", bound=ft.URLDefaultCallable)
 T_url_value_preprocessor = t.TypeVar(
     "T_url_value_preprocessor", bound=ft.URLValuePreprocessorCallable
@@ -182,6 +185,21 @@ class Scaffold:
         self.template_context_processors: dict[
             ft.AppOrBlueprintKey, list[ft.TemplateContextProcessorCallable]
         ] = defaultdict(list, {None: [_default_template_ctx_processor]})
+
+        #: A data structure of functions to call to inject request-related
+        #: context variables when rendering templates, in the format
+        #: ``{scope: [functions]}``. The ``scope`` key is the name of a
+        #: blueprint the functions are active for, or ``None`` for all
+        #: requests.
+        #:
+        #: To register a function, use the :meth:`request_context_var_processor`
+        #: decorator.
+        #:
+        #: This data structure is internal. It should not be modified
+        #: directly and its format may change at any time.
+        self.request_context_var_processors: dict[
+            ft.AppOrBlueprintKey, list[ft.RequestContextVarProcessorCallable]
+        ] = defaultdict(list)
 
         #: A data structure of functions to call to modify the keyword
         #: arguments passed to the view function, in the format
@@ -553,6 +571,30 @@ class Scaffold:
         and affect every template, use :meth:`.Blueprint.app_context_processor`.
         """
         self.template_context_processors[None].append(f)
+        return f
+
+    @setupmethod
+    def request_context_var_processor(
+        self,
+        f: T_request_context_var_processor,
+    ) -> T_request_context_var_processor:
+        """Registers a request context variable processor function. These functions
+        run before rendering a template when :data:`REQUEST_CONTEXT_VARS_ENABLED`
+        is set to ``True``. The keys of the returned dict are added as variables
+        available in the template.
+
+        Unlike :meth:`context_processor`, these processors are only invoked
+        when explicitly enabled via configuration, allowing for opt-in
+        request-related variable injection without polluting the template
+        context in all cases.
+
+        This is available on both app and blueprint objects. When used on an app,
+        this is called for every rendered template. When used on a blueprint, this
+        is called for templates rendered from the blueprint's views.
+
+        .. versionadded:: 3.2
+        """
+        self.request_context_var_processors[None].append(f)
         return f
 
     @setupmethod
