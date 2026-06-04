@@ -1,0 +1,25 @@
+[project]
+name = "task-center"
+version = "0.1.0"
+description = "A reusable async task center for Flask"
+authors = [{name = "Flask Task Center", email = "dev@example.com"}]
+license = "BSD-3-Clause"
+requires-python = ">=3.10"
+dependencies = [
+    "flask>=3.0",
+    "sqlalchemy>=2.0",
+    "pydantic>=2.0",
+    "python-dotenv",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.20",
+    "httpx>=0.24",
+    "pytest-cov>=4.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
