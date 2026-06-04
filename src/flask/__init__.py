@@ -37,3 +37,5 @@ from .templating import stream_template as stream_template
 from .templating import stream_template_string as stream_template_string
 from .wrappers import Request as Request
 from .wrappers import Response as Response
+from .request_logger import RequestLogger as RequestLogger
+from .request_logger import request_id as request_id
