@@ -403,6 +403,13 @@ class App(Scaffold):
 
         self.subdomain_matching = subdomain_matching
 
+        #: Maps endpoint names to the max content length for that route.
+        #: This is set by the ``max_content_length`` parameter to
+        #: :meth:`route` or :meth:`add_url_rule`.
+        #:
+        #: .. versionadded:: 3.2
+        self.url_max_content_length: dict[str, int | None] = {}
+
         # tracks internally if the application already handled at least one
         # request.
         self._got_first_request = False
@@ -615,6 +622,8 @@ class App(Scaffold):
         options["endpoint"] = endpoint
         methods = options.pop("methods", None)
 
+        max_content_length: int | None = options.pop("max_content_length", None)
+
         # if the methods are not given and the view_func object knows its
         # methods we can use that instead.  If neither exists, we go with
         # a tuple of only ``GET`` as default.
@@ -659,6 +668,9 @@ class App(Scaffold):
                     f" endpoint function: {endpoint}"
                 )
             self.view_functions[endpoint] = view_func
+
+        if max_content_length is not None:
+            self.url_max_content_length[endpoint] = max_content_length
 
     @t.overload
     def template_filter(self, name: T_template_filter) -> T_template_filter: ...

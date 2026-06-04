@@ -1376,6 +1376,17 @@ class Flask(App):
         req = ctx.request
         names = (None, *reversed(req.blueprints))
 
+        if req.endpoint is not None:
+            if req.endpoint in self.url_max_content_length:
+                req.max_content_length = self.url_max_content_length[req.endpoint]
+            elif req.blueprints:
+                for bp_name in req.blueprints:
+                    if bp_name in self.blueprints:
+                        bp = self.blueprints[bp_name]
+                        if bp.max_content_length is not None:
+                            req.max_content_length = bp.max_content_length
+                            break
+
         for name in names:
             if name in self.url_value_preprocessors:
                 for url_func in self.url_value_preprocessors[name]:

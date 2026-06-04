@@ -171,6 +171,18 @@ class Blueprint(Scaffold):
 
     _got_registered_once = False
 
+    max_content_length: int | None = None
+    """The maximum number of bytes that will be read during requests handled
+    by this blueprint. If this limit is exceeded, a 413
+    :exc:`~werkzeug.exceptions.RequestEntityTooLarge` error is raised. If it
+    is set to ``None``, the app's :data:`MAX_CONTENT_LENGTH` config is used.
+
+    This can be overridden per route using the ``max_content_length`` parameter
+    to :meth:`route` or :meth:`add_url_rule`.
+
+    .. versionadded:: 3.2
+    """
+
     def __init__(
         self,
         name: str,
