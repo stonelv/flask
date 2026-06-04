@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="{{ theme or 'light' }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}文章管理系统{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    {% block header %}
+    <header>
+        <nav>
+            <ul>
+                {% if session.logged_in %}
+                <li><a href="{{ url_for('articles.index') }}">文章管理</a></li>
+                <li><a href="{{ url_for('articles.new') }}">新建文章</a></li>
+                <li><a href="{{ url_for('articles.public_list') }}">前台首页</a></li>
+                <li><a href="{{ url_for('auth.logout') }}">退出登录</a></li>
+                {% else %}
+                <li><a href="{{ url_for('articles.public_list') }}">首页</a></li>
+                <li><a href="{{ url_for('auth.login') }}">登录</a></li>
+                {% endif %}
+            </ul>
+        </nav>
+    </header>
+    {% endblock %}
+
+    <main>
+        <!-- 显示 flash 消息 -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for category, message in messages %}
+                        <div class="flash-message flash-{{ category }}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}
+        <!-- 页面内容将在这里渲染 -->
+        {% endblock %}
+    </main>
+
+    {% block footer %}
+    <footer>
+        <p>&copy; 2023 文章管理系统</p>
+    </footer>
+    {% endblock %}
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

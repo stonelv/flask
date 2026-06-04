@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+
+{% block title %}文章列表 - 文章管理系统{% endblock %}
+
+{% block content %}
+<div class="public-articles-container">
+    <h1>文章列表</h1>
+    
+    <!-- 文章列表 -->
+    <div class="articles-grid">
+        {% if articles.items %} 
+        {% for article in articles.items %} 
+        <article class="article-card">
+            <h2 class="article-title">
+                <a href="{{ url_for('articles.public_detail', id=article.id) }}">{{ article.title }}</a>
+            </h2>
+            <div class="article-meta">
+                <span class="article-date">
+                    {{ article.created_at.strftime('%Y-%m-%d') }}
+                </span>
+                <span class="article-status published">已发布</span>
+            </div>
+            <div class="article-excerpt">
+                {{ article.content[:200] }}{% if article.content|length > 200 %}...{% endif %}
+            </div>
+            <a href="{{ url_for('articles.public_detail', id=article.id) }}" class="read-more">
+                阅读全文
+            </a>
+        </article>
+        {% endfor %} 
+        {% else %} 
+        <div class="empty-state">
+            <p>还没有任何已发布的文章。</p>
+        </div>
+        {% endif %} 
+    </div>
+    
+    <!-- 分页控制 -->
+    {% if articles.pages > 1 %} 
+    <div class="pagination">
+        <ul>
+            <!-- 上一页 -->
+            <li {% if not articles.has_prev %} class="disabled" {% endif %}>
+                <a href="{{ url_for('articles.public_list', page=articles.prev_num) if articles.has_prev else '#' }}">
+                    上一页
+                </a>
+            </li>
+            
+            <!-- 页码 -->
+            {% for page_num in articles.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %} 
+            {% if page_num %} 
+            <li {% if page_num == articles.page %} class="active" {% endif %}>
+                <a href="{{ url_for('articles.public_list', page=page_num) }}">
+                    {{ page_num }}
+                </a>
+            </li>
+            {% else %} 
+            <li class="ellipsis">
+                <span>...</span>
+            </li>
+            {% endif %} 
+            {% endfor %} 
+            
+            <!-- 下一页 -->
+            <li {% if not articles.has_next %} class="disabled" {% endif %}>
+                <a href="{{ url_for('articles.public_list', page=articles.next_num) if articles.has_next else '#' }}">
+                    下一页
+                </a>
+            </li>
+        </ul>
+    </div>
+    {% endif %} 
+</div>
+{% endblock %}
