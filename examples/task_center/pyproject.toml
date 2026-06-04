@@ -1,0 +1,20 @@
+[project]
+name = "flask-example-task-center"
+version = "1.0.0"
+description = "Flask background task center with idempotency, cancellation, and progress tracking."
+readme = "README.md"
+classifiers = ["Private :: Do Not Upload"]
+dependencies = ["flask", "structlog"]
+
+[build-system]
+requires = ["flit_core<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.flit.module]
+name = "task_center"
+
+[tool.ruff]
+src = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
