@@ -6,3 +6,5 @@ dist/
 htmlcov/
 .tox/
 docs/_build/
+examples/seckill/venv/
+.venv/
