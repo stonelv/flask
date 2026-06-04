@@ -41,6 +41,10 @@ from .helpers import get_debug_flag
 from .helpers import get_flashed_messages
 from .helpers import get_load_dotenv
 from .helpers import send_from_directory
+from .logging import get_request_duration
+from .logging import get_request_id
+from .logging import set_request_id
+from .logging import set_request_start_time
 from .sansio.app import App
 from .sessions import SecureCookieSessionInterface
 from .sessions import SessionInterface
@@ -957,11 +961,31 @@ class Flask(App):
         The default implementation logs the exception as error on the
         :attr:`logger`.
 
+        This method now includes the request_id in the log output for
+        better traceability, and works with structured logging to provide
+        detailed exception information including stack traces.
+
         .. versionadded:: 0.8
         """
-        self.logger.error(
-            f"Exception on {ctx.request.path} [{ctx.request.method}]", exc_info=exc_info
-        )
+        request_id = get_request_id()
+        method = ctx.request.method
+        path = ctx.request.path
+
+        log_message = f"Exception on {path} [{method}]"
+        if request_id:
+            log_message = f"[{request_id}] {log_message}"
+
+        extra = {
+            "request_info": {
+                "method": method,
+                "path": path,
+            }
+        }
+
+        if request_id:
+            extra["request_info"]["request_id"] = request_id
+
+        self.logger.error(log_message, exc_info=exc_info, extra=extra)
 
     def dispatch_request(self, ctx: AppContext) -> ft.ResponseReturnValue:
         """Does the request dispatching.  Matches the URL and returns the
@@ -1009,6 +1033,9 @@ class Flask(App):
 
         self._got_first_request = True
 
+        set_request_id()
+        set_request_start_time()
+
         try:
             request_started.send(self, _async_wrapper=self.ensure_sync)
             rv = self.preprocess_request(ctx)
@@ -1048,7 +1075,44 @@ class Flask(App):
             self.logger.exception(
                 "Request finalizing failed with an error while handling an error"
             )
+        
+        self._log_request_completion(ctx, response)
         return response
+
+    def _log_request_completion(self, ctx: AppContext, response: Response) -> None:
+        """Log the completion of a request with structured information.
+
+        This method logs the request method, path, status code, duration,
+        and request ID for each completed request.
+
+        :param ctx: The application context containing request information.
+        :param response: The response object containing status information.
+        """
+        request_id = get_request_id()
+        duration = get_request_duration()
+        method = ctx.request.method
+        path = ctx.request.path
+        status_code = response.status_code
+
+        log_message = f"{method} {path} {status_code}"
+        if duration is not None:
+            log_message += f" ({duration*1000:.2f}ms)"
+
+        extra = {
+            "request_info": {
+                "method": method,
+                "path": path,
+                "status_code": status_code,
+            }
+        }
+
+        if duration is not None:
+            extra["request_info"]["duration_ms"] = round(duration * 1000, 2)
+
+        if request_id:
+            extra["request_info"]["request_id"] = request_id
+
+        self.logger.info(log_message, extra=extra)
 
     def make_default_options_response(self, ctx: AppContext) -> Response:
         """This method is called to create the default ``OPTIONS`` response.
