@@ -56,7 +56,7 @@ class EnvironBuilder(werkzeug.test.EnvironBuilder):
         *args: t.Any,
         **kwargs: t.Any,
     ) -> None:
-        assert not (base_url or subdomain or url_scheme) or (
+        assert not (base_url or subdomain or url_scheme) or (  # noqa: S101
             base_url is not None
         ) != bool(subdomain or url_scheme), (
             'Cannot pass "subdomain" or "url_scheme" with "base_url".'

@@ -187,5 +187,5 @@ class MethodView(View):
         if meth is None and request.method == "HEAD":
             meth = getattr(self, "get", None)
 
-        assert meth is not None, f"Unimplemented method {request.method!r}"
+        assert meth is not None, f"Unimplemented method {request.method!r}"  # noqa: S101
         return current_app.ensure_sync(meth)(**kwargs)  # type: ignore[no-any-return]

@@ -25,13 +25,16 @@ from .helpers import get_debug_flag
 from .helpers import get_load_dotenv
 
 if t.TYPE_CHECKING:
-    import ssl
-
     from _typeshed.wsgi import StartResponse
     from _typeshed.wsgi import WSGIApplication
     from _typeshed.wsgi import WSGIEnvironment
 
     from .app import Flask
+
+try:
+    import ssl
+except ImportError:  # pragma: no cover
+    ssl = None  # type: ignore[assignment]
 
 
 class NoAppException(click.UsageError):
@@ -343,7 +346,7 @@ class ScriptInfo:
         else:
             if self.app_import_path:
                 path, name = (
-                    re.split(r":(?![\\/])", self.app_import_path, maxsplit=1) + [None]
+                    re.split(r":(?![\\/])", self.app_import_path, maxsplit=1) + [None]  # noqa: RUF005
                 )[:2]
                 import_name = prepare_import(path)
                 app = locate_app(import_name, name)

@@ -390,7 +390,7 @@ class Blueprint(Scaffold):
             value = defaultdict(
                 dict,
                 {
-                    code: {exc_class: func for exc_class, func in code_values.items()}
+                    code: {exc_class: func for exc_class, func in code_values.items()}  # noqa: C416
                     for code, code_values in value.items()
                 },
             )

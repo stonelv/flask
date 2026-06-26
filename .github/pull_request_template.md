@@ -14,12 +14,21 @@ automatically close an issue.
 fixes #<issue number>
 -->
 
-<!--
-Ensure each step in CONTRIBUTING.rst is complete, especially the following:
+## Checklist
 
-- Add tests that demonstrate the correct behavior of the change. Tests
-  should fail without the change.
-- Add or update relevant docs, in the docs folder and in code.
-- Add an entry in CHANGES.rst summarizing the change and linking to the issue.
-- Add `.. versionchanged::` entries in any relevant code docs.
+- [ ] Add tests that demonstrate the correct behavior of the change.
+- [ ] Add or update relevant docs, in the ``docs`` folder and in code.
+- [ ] Add a changelog fragment in ``changelog.d/`` (see below).
+- [ ] Add ``.. versionchanged::`` entries in any relevant code docs.
+- [ ] Linting passes (``make lint`` or ``tox run -e style``).
+- [ ] Type checking passes (``make type`` or ``tox run -e typing``).
+
+<!--
+Changelog fragment: create a file in changelog.d/ named
+<issue-or-pr-number>.<type>.rst where <type> is one of:
+breaking, feature, fix, docs, internal
+
+Example: changelog.d/1234.feature.rst with content:
+    Added support for new widget. :pr:`1234`
 -->
+

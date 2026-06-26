@@ -1,0 +1,51 @@
+name: Benchmarks
+on:
+  pull_request:
+    paths: ['src/**', 'benchmarks/**']
+  push:
+    branches: [main]
+    paths: ['src/**', 'benchmarks/**']
+permissions: {}
+concurrency:
+  group: bench-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          enable-cache: true
+          prune-cache: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.13'
+      - name: Run benchmarks
+        run: |
+          uv run --locked --no-default-groups --group dev tox run -e bench -- \
+            --benchmark-json=bench-results.json
+      - name: Download baseline
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: baseline.json
+          key: benchmark-baseline-${{ github.base_ref }}
+        id: baseline
+      - name: Compare with baseline
+        if: steps.baseline.outputs.cache-hit == 'true' && github.event_name == 'pull_request'
+        run: python3 scripts/ci/compare_benchmarks.py bench-results.json baseline.json
+        continue-on-error: true  # Advisory only — does not block merge
+      - name: Store baseline
+        if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: bench-results.json
+          key: benchmark-baseline-main-${{ github.sha }}
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: benchmark-results
+          path: bench-results.json
+          if-no-files-found: warn

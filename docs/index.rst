@@ -62,6 +62,7 @@ community-maintained extensions to add even more functionality.
    deploying/index
    gevent
    async-await
+   observability
 
 
 API Reference
@@ -87,3 +88,4 @@ Additional Notes
    contributing
    license
    changes
+   adr/index

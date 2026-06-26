@@ -32,12 +32,18 @@ dependencies = [
 [project.optional-dependencies]
 async = ["asgiref>=3.2"]
 dotenv = ["python-dotenv"]
+otel = [
+    "opentelemetry-api>=1.20",
+    "opentelemetry-sdk>=1.20",
+    "opentelemetry-instrumentation-wsgi>=0.41b0",
+]
 
 [dependency-groups]
 dev = [
     "ruff",
     "tox",
     "tox-uv",
+    "towncrier",
 ]
 docs = [
     "pallets-sphinx-themes",
@@ -69,6 +75,9 @@ typing = [
     "python-dotenv",
     "types-contextvars",
     "types-dataclasses",
+]
+bench = [
+    "pytest-benchmark",
 ]
 
 [project.urls]
@@ -136,6 +145,7 @@ module = [
     "dotenv.*",
     "cryptography.*",
     "importlib_metadata",
+    "opentelemetry.*",
 ]
 ignore_missing_imports = true
 
@@ -152,20 +162,72 @@ output-format = "full"
 
 [tool.ruff.lint]
 select = [
-    "B",  # flake8-bugbear
-    "E",  # pycodestyle error
-    "F",  # pyflakes
-    "I",  # isort
-    "UP",  # pyupgrade
-    "W",  # pycodestyle warning
+    "B",    # flake8-bugbear
+    "E",    # pycodestyle error
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "W",    # pycodestyle warning
+    "S",    # flake8-bandit (security)
+    "PT",   # flake8-pytest-style
+    "RUF",  # ruff-specific rules
+    "SIM",  # flake8-simplify
+    "PIE",  # flake8-pie
+    "T20",  # flake8-print
+    "C4",   # flake8-comprehensions
+    "ISC",  # flake8-implicit-str-concat
 ]
 
 [tool.ruff.lint.isort]
 force-single-line = true
 order-by-type = false
 
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "S110", "S307", "S324", "S704", "PT001", "PT006", "PT007", "PT011", "PT018", "SIM117", "SIM118", "SIM300", "RUF012", "RUF040", "RUF043", "RUF059", "RUF061", "RUF100", "C408"]
+"benchmarks/**" = ["T20", "S101"]
+"scripts/**" = ["T20", "S"]
+"src/flask/cli.py" = ["S307"]
+"src/flask/sessions.py" = ["S324"]
+"src/flask/config.py" = ["S102", "S110"]
+"src/flask/debughelpers.py" = ["S101"]
+"src/flask/json/tag.py" = ["S704"]
+"src/flask/**" = ["RUF012", "SIM108", "SIM101", "SIM105"]
+
 [tool.codespell]
 ignore-words-list = "te"
+
+[tool.towncrier]
+package = "flask"
+package_dir = "src"
+directory = "changelog.d"
+filename = "CHANGES.rst"
+title_format = "Version {version}"
+underlines = ["-", "~"]
+
+[[tool.towncrier.type]]
+directory = "breaking"
+name = "Breaking Changes"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "feature"
+name = "Features"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "fix"
+name = "Bug Fixes"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "docs"
+name = "Documentation"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "internal"
+name = "Internal Changes"
+showcontent = true
 
 [tool.tox]
 env_list = [
@@ -253,6 +315,15 @@ commands = [["sphinx-build", "-E", "-W", "-b", "dirhtml", "docs", "docs/_build/d
 description = "continuously rebuild docs and start a local server"
 dependency_groups = ["docs", "docs-auto"]
 commands = [["sphinx-autobuild", "-W", "-b", "dirhtml", "--watch", "src", "docs", "docs/_build/dirhtml"]]
+
+[tool.tox.env.bench]
+description = "run benchmarks"
+dependency_groups = ["tests", "bench"]
+commands = [[
+    "pytest", "benchmarks/", "-v", "--benchmark-only",
+    "--benchmark-json={env_tmp_dir}/benchmark-results.json",
+    {replace = "posargs", default = [], extend = true},
+]]
 
 [tool.tox.env.update-actions]
 description = "update GitHub Actions pins"

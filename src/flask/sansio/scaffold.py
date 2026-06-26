@@ -702,7 +702,7 @@ def _endpoint_from_view_func(view_func: ft.RouteCallable) -> str:
     """Internal helper that returns the default endpoint for a given
     function.  This always is the function name.
     """
-    assert view_func is not None, "expected view func if endpoint is not provided."
+    assert view_func is not None, "expected view func if endpoint is not provided."  # noqa: S101
     return view_func.__name__
 
 
