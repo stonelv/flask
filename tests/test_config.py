@@ -221,23 +221,23 @@ def test_get_namespace():
     app.config["BAR_STUFF_1"] = "bar stuff 1"
     app.config["BAR_STUFF_2"] = "bar stuff 2"
     foo_options = app.config.get_namespace("FOO_")
-    assert 2 == len(foo_options)
-    assert "foo option 1" == foo_options["option_1"]
-    assert "foo option 2" == foo_options["option_2"]
+    assert len(foo_options) == 2
+    assert foo_options["option_1"] == "foo option 1"
+    assert foo_options["option_2"] == "foo option 2"
     bar_options = app.config.get_namespace("BAR_", lowercase=False)
-    assert 2 == len(bar_options)
-    assert "bar stuff 1" == bar_options["STUFF_1"]
-    assert "bar stuff 2" == bar_options["STUFF_2"]
+    assert len(bar_options) == 2
+    assert bar_options["STUFF_1"] == "bar stuff 1"
+    assert bar_options["STUFF_2"] == "bar stuff 2"
     foo_options = app.config.get_namespace("FOO_", trim_namespace=False)
-    assert 2 == len(foo_options)
-    assert "foo option 1" == foo_options["foo_option_1"]
-    assert "foo option 2" == foo_options["foo_option_2"]
+    assert len(foo_options) == 2
+    assert foo_options["foo_option_1"] == "foo option 1"
+    assert foo_options["foo_option_2"] == "foo option 2"
     bar_options = app.config.get_namespace(
         "BAR_", lowercase=False, trim_namespace=False
     )
-    assert 2 == len(bar_options)
-    assert "bar stuff 1" == bar_options["BAR_STUFF_1"]
-    assert "bar stuff 2" == bar_options["BAR_STUFF_2"]
+    assert len(bar_options) == 2
+    assert bar_options["BAR_STUFF_1"] == "bar stuff 1"
+    assert bar_options["BAR_STUFF_2"] == "bar stuff 2"
 
 
 @pytest.mark.parametrize("encoding", ["utf-8", "iso-8859-15", "latin-1"])

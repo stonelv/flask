@@ -32,6 +32,10 @@ dependencies = [
 [project.optional-dependencies]
 async = ["asgiref>=3.2"]
 dotenv = ["python-dotenv"]
+observability = [
+    "opentelemetry-api>=1.20",
+    "opentelemetry-sdk>=1.20",
+]
 
 [dependency-groups]
 dev = [
@@ -58,7 +62,16 @@ pre-commit = [
 tests = [
     "asgiref",
     "pytest",
+    "pytest-cov",
     "python-dotenv",
+]
+benchmarks = [
+    "pytest-benchmark>=5.0",
+]
+observability-test = [
+    "opentelemetry-api>=1.20",
+    "opentelemetry-sdk>=1.20",
+    "opentelemetry-test-utils>=0.41b0",
 ]
 typing = [
     "asgiref",
@@ -117,6 +130,7 @@ source = ["flask", "tests"]
 source = ["src", "*/site-packages"]
 
 [tool.coverage.report]
+fail_under = 90
 exclude_also = [
     "if t.TYPE_CHECKING",
     "raise NotImplementedError",
@@ -136,6 +150,7 @@ module = [
     "dotenv.*",
     "cryptography.*",
     "importlib_metadata",
+    "opentelemetry.*",
 ]
 ignore_missing_imports = true
 
@@ -153,12 +168,36 @@ output-format = "full"
 [tool.ruff.lint]
 select = [
     "B",  # flake8-bugbear
+    "C4",  # flake8-comprehensions
     "E",  # pycodestyle error
     "F",  # pyflakes
     "I",  # isort
+    "LOG",  # flake8-logging
+    "PERF",  # perflint
+    "PIE",  # flake8-pie
+    "RUF",  # ruff-specific
+    "S",  # flake8-bandit (security)
+    "SIM",  # flake8-simplify
+    "TCH",  # flake8-type-checking
     "UP",  # pyupgrade
     "W",  # pycodestyle warning
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "S110", "S704", "RUF012", "RUF040", "RUF043", "SIM117"]  # test patterns
+"examples/**" = ["S101", "S104", "S201"]  # examples may use assert, 0.0.0.0, debug
+"benchmarks/**" = ["S101"]  # assert is expected in benchmarks
+"src/flask/app.py" = ["S101"]  # internal assertion for host_matching validation
+"src/flask/cli.py" = ["S307"]  # eval for shell context loading
+"src/flask/config.py" = ["S102", "S110", "SIM105"]  # exec for config loading, try-except-pass for JSON
+"src/flask/debughelpers.py" = ["S101", "PERF401"]  # debug assertion, debug helper
+"src/flask/json/tag.py" = ["S704", "RUF012"]  # Markup for safe HTML, mutable class attr pattern
+"src/flask/sansio/app.py" = ["RUF012", "PERF203"]  # mutable class attr pattern, try-except in loop
+"src/flask/sansio/scaffold.py" = ["S101"]  # internal assertion for view func
+"src/flask/sessions.py" = ["S324"]  # sha1 for non-security session ID
+"src/flask/templating.py" = ["PERF203"]  # try-except in loop for template loading
+"src/flask/testing.py" = ["S101"]  # assertion in test helper
+"src/flask/views.py" = ["S101"]  # assertion for method existence
 
 [tool.ruff.lint.isort]
 force-single-line = true
@@ -173,6 +212,7 @@ env_list = [
     "py3.13", "py3.12", "py3.11", "py3.10",
     "pypy3.11",
     "tests-min", "tests-dev",
+    "benchmarks",
     "style",
     "typing",
     "docs",
@@ -188,7 +228,9 @@ use_frozen_constraints = true
 dependency_groups = ["tests"]
 env_tmp_dir = "{toxworkdir}/tmp/{envname}"
 commands = [[
-    "pytest", "-v", "--tb=short", "--basetemp={env_tmp_dir}",
+    "pytest", "-v", "--tb=short",
+    "--cov=flask", "--cov-report=term-missing", "--cov-report=xml",
+    "--basetemp={env_tmp_dir}",
     {replace = "posargs", default = [], extend = true},
 ]]
 
@@ -229,6 +271,17 @@ commands = [
         {replace = "posargs", default = [], extend = true},
     ],
 ]
+
+[tool.tox.env.benchmarks]
+description = "run performance benchmarks"
+dependency_groups = ["benchmarks"]
+commands = [[
+    "pytest", "benchmarks/", "--benchmark-only",
+    "--benchmark-json=benchmarks/output.json",
+    "--benchmark-min-rounds=10",
+    "-v",
+    {replace = "posargs", default = [], extend = true},
+]]
 
 [tool.tox.env.style]
 description = "run all pre-commit hooks on all files"

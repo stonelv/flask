@@ -221,7 +221,7 @@ def test_tojson_filter(app, req_ctx):
 
 
 def test_json_customization(app, client):
-    class X:  # noqa: B903, for Python2 compatibility
+    class X:
         def __init__(self, val):
             self.val = val
 

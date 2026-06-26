@@ -381,7 +381,8 @@ def test_missing_session(app):
     app.secret_key = None
 
     def expect_exception(f, *args, **kwargs):
-        e = pytest.raises(RuntimeError, f, *args, **kwargs)
+        with pytest.raises(RuntimeError) as e:
+            f(*args, **kwargs)
         assert e.value.args and "session is unavailable" in e.value.args[0]
 
     with app.test_request_context():
@@ -484,9 +485,9 @@ def test_session_special_types(app, client):
         client.get("/")
         s = flask.session
         assert s["t"] == (1, 2, 3)
-        assert type(s["b"]) is bytes  # noqa: E721
+        assert type(s["b"]) is bytes
         assert s["b"] == b"\xff"
-        assert type(s["m"]) is Markup  # noqa: E721
+        assert type(s["m"]) is Markup
         assert s["m"] == Markup("<html>")
         assert s["u"] == the_uuid
         assert s["d"] == now
@@ -915,10 +916,10 @@ def test_error_handling(app, client):
     assert rv.data == b"not found"
     rv = client.get("/error")
     assert rv.status_code == 500
-    assert b"internal server error" == rv.data
+    assert rv.data == b"internal server error"
     rv = client.get("/forbidden")
     assert rv.status_code == 403
-    assert b"forbidden" == rv.data
+    assert rv.data == b"forbidden"
 
 
 def test_error_handling_processing(app, client):
@@ -1369,8 +1370,8 @@ def test_url_generation(app, req_ctx):
 
 def test_build_error_handler(app):
     # Test base case, a URL which results in a BuildError.
-    with app.test_request_context():
-        pytest.raises(BuildError, flask.url_for, "spam")
+    with app.test_request_context(), pytest.raises(BuildError):
+        flask.url_for("spam")
 
     # Verify the error is re-raised if not the current exception.
     try:
@@ -1381,7 +1382,8 @@ def test_build_error_handler(app):
     try:
         raise RuntimeError("Test case where BuildError is not current.")
     except RuntimeError:
-        pytest.raises(BuildError, app.handle_url_build_error, error, "spam", {})
+        with pytest.raises(BuildError):
+            app.handle_url_build_error(error, "spam", {})
 
     # Test a custom handler.
     def handler(error, endpoint, values):
@@ -1400,8 +1402,8 @@ def test_build_error_handler_reraise(app):
 
     app.url_build_error_handlers.append(handler_raises_build_error)
 
-    with app.test_request_context():
-        pytest.raises(BuildError, flask.url_for, "not.existing")
+    with app.test_request_context(), pytest.raises(BuildError):
+        flask.url_for("not.existing")
 
 
 def test_url_for_passes_special_values_to_build_error_handler(app):
@@ -1681,9 +1683,9 @@ def test_inject_blueprint_url_defaults(app):
 
     app.register_blueprint(bp)
 
-    values = dict()
+    values = {}
     app.inject_url_defaults("foo.view", values)
-    expected = dict(page="login")
+    expected = {"page": "login"}
     assert values == expected
 
     with app.test_request_context("/somepage"):

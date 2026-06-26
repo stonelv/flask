@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import os
 import sys
 import typing as t
@@ -13,7 +12,6 @@ from werkzeug.exceptions import BadRequestKeyError
 from werkzeug.routing import BuildError
 from werkzeug.routing import Map
 from werkzeug.routing import Rule
-from werkzeug.sansio.response import Response
 from werkzeug.utils import cached_property
 from werkzeug.utils import redirect as _wz_redirect
 
@@ -34,6 +32,9 @@ from .scaffold import Scaffold
 from .scaffold import setupmethod
 
 if t.TYPE_CHECKING:  # pragma: no cover
+    import logging
+
+    from werkzeug.sansio.response import Response
     from werkzeug.wrappers import Response as BaseResponse
 
     from ..testing import FlaskClient

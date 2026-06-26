@@ -46,7 +46,7 @@ def setupmethod(f: F) -> F:
         self._check_setup_finished(f_name)
         return f(self, *args, **kwargs)
 
-    return t.cast(F, update_wrapper(wrapper_func, f))
+    return t.cast("F", update_wrapper(wrapper_func, f))
 
 
 class Scaffold:

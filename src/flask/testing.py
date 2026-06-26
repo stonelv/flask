@@ -5,7 +5,6 @@ import typing as t
 from contextlib import contextmanager
 from contextlib import ExitStack
 from copy import copy
-from types import TracebackType
 from urllib.parse import urlsplit
 
 import werkzeug.test
@@ -15,13 +14,15 @@ from werkzeug.test import Client
 from werkzeug.wrappers import Request as BaseRequest
 
 from .cli import ScriptInfo
-from .sessions import SessionMixin
 
 if t.TYPE_CHECKING:  # pragma: no cover
+    from types import TracebackType
+
     from _typeshed.wsgi import WSGIEnvironment
     from werkzeug.test import TestResponse
 
     from .app import Flask
+    from .sessions import SessionMixin
 
 
 class EnvironBuilder(werkzeug.test.EnvironBuilder):

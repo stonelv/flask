@@ -7,6 +7,9 @@ from _pytest import monkeypatch
 from flask import Flask
 from flask.globals import app_ctx as _app_ctx
 
+# Sentinel for unset environment variables (replaces monkeypatch.notset removed in pytest 9)
+_notset = object()
+
 
 @pytest.fixture(scope="session", autouse=True)
 def _standard_os_environ():
@@ -16,15 +19,22 @@ def _standard_os_environ():
     """
     mp = monkeypatch.MonkeyPatch()
     out = (
-        (os.environ, "FLASK_ENV_FILE", monkeypatch.notset),
-        (os.environ, "FLASK_APP", monkeypatch.notset),
-        (os.environ, "FLASK_DEBUG", monkeypatch.notset),
-        (os.environ, "FLASK_RUN_FROM_CLI", monkeypatch.notset),
-        (os.environ, "WERKZEUG_RUN_MAIN", monkeypatch.notset),
+        (os.environ, "FLASK_ENV_FILE", _notset),
+        (os.environ, "FLASK_APP", _notset),
+        (os.environ, "FLASK_DEBUG", _notset),
+        (os.environ, "FLASK_RUN_FROM_CLI", _notset),
+        (os.environ, "WERKZEUG_RUN_MAIN", _notset),
+        # Clean up test-specific env vars
+        (os.environ, "FOO", _notset),
+        (os.environ, "BAR", _notset),
+        (os.environ, "SPAM", _notset),
+        (os.environ, "HAM", _notset),
+        (os.environ, "EGGS", _notset),
+        (os.environ, "FLASK_SKIP_DOTENV", _notset),
     )
 
     for _, key, value in out:
-        if value is monkeypatch.notset:
+        if value is _notset:
             mp.delenv(key, False)
         else:
             mp.setenv(key, value)
@@ -38,7 +48,11 @@ def _reset_os_environ(monkeypatch, _standard_os_environ):
     """Reset ``os.environ`` to the standard environ after each test,
     in case a test changed something without cleaning up.
     """
-    monkeypatch._setitem.extend(_standard_os_environ)
+    for mapping, key, value in _standard_os_environ:
+        if value is _notset:
+            monkeypatch.delenv(key, raising=False)
+        else:
+            monkeypatch.setenv(key, value)
 
 
 @pytest.fixture

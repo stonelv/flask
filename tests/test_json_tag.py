@@ -34,14 +34,15 @@ def test_duplicate_tag():
         key = " d"
 
     s = TaggedJSONSerializer()
-    pytest.raises(KeyError, s.register, TagDict)
+    with pytest.raises(KeyError):
+        s.register(TagDict)
     s.register(TagDict, force=True, index=0)
     assert isinstance(s.tags[" d"], TagDict)
     assert isinstance(s.order[0], TagDict)
 
 
 def test_custom_tag():
-    class Foo:  # noqa: B903, for Python2 compatibility
+    class Foo:
         def __init__(self, data):
             self.data = data
 
@@ -65,9 +66,12 @@ def test_custom_tag():
 
 def test_tag_interface():
     t = JSONTag(None)
-    pytest.raises(NotImplementedError, t.check, None)
-    pytest.raises(NotImplementedError, t.to_json, None)
-    pytest.raises(NotImplementedError, t.to_python, None)
+    with pytest.raises(NotImplementedError):
+        t.check(None)
+    with pytest.raises(NotImplementedError):
+        t.to_json(None)
+    with pytest.raises(NotImplementedError):
+        t.to_python(None)
 
 
 def test_tag_order():

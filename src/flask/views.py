@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import typing as t
 
-from . import typing as ft
 from .globals import current_app
 from .globals import request
+
+if t.TYPE_CHECKING:
+    from . import typing as ft
 
 F = t.TypeVar("F", bound=t.Callable[..., t.Any])
 

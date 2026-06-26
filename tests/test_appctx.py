@@ -21,9 +21,8 @@ def test_basic_url_generation(app):
 
 
 def test_url_generation_requires_server_name(app):
-    with app.app_context():
-        with pytest.raises(RuntimeError):
-            flask.url_for("index")
+    with app.app_context(), pytest.raises(RuntimeError):
+        flask.url_for("index")
 
 
 def test_url_generation_without_context_fails():
@@ -125,9 +124,8 @@ def test_app_tearing_down_with_unhandled_exception(app, client):
     def index():
         raise ValueError("dummy")
 
-    with pytest.raises(ValueError, match="dummy"):
-        with app.app_context():
-            client.get("/")
+    with pytest.raises(ValueError, match="dummy"), app.app_context():
+        client.get("/")
 
     assert len(cleanup_stuff) == 2
     assert isinstance(cleanup_stuff[0], ValueError)

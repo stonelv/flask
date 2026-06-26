@@ -4,15 +4,12 @@ import importlib.util
 import os
 import sys
 import typing as t
-from datetime import datetime
 from functools import cache
 from functools import update_wrapper
-from types import TracebackType
 
 import werkzeug.utils
 from werkzeug.exceptions import abort as _wz_abort
 from werkzeug.utils import redirect as _wz_redirect
-from werkzeug.wrappers import Response as BaseResponse
 
 from .globals import _cv_app
 from .globals import app_ctx
@@ -22,6 +19,11 @@ from .globals import session
 from .signals import message_flashed
 
 if t.TYPE_CHECKING:  # pragma: no cover
+    from datetime import datetime
+    from types import TracebackType
+
+    from werkzeug.wrappers import Response as BaseResponse
+
     from .wrappers import Response
 
 

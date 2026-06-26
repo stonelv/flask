@@ -1,0 +1,136 @@
+name: Failure Attribution
+on:
+  workflow_run:
+    workflows:
+      - "Fast Validation"
+      - "Tests"
+      - "Compatibility Matrix"
+      - "Benchmarks"
+    types: [completed]
+permissions:
+  pull-requests: write
+  actions: read
+jobs:
+  attribute-failure:
+    name: Attribute Failure
+    if: >
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download workflow logs
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const fs = require('fs');
+            const run = context.payload.workflow_run;
+
+            // Get the workflow run logs
+            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: run.id,
+            });
+
+            // Categorize the failure based on workflow name
+            const workflowName = run.name;
+            let category = 'unknown';
+            let suggestion = '';
+
+            if (workflowName === 'Fast Validation') {
+              // Check which step failed by examining the job details
+              const jobs = await github.rest.actions.listJobsForWorkflowRun({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: run.id,
+              });
+
+              for (const job of jobs.data.jobs) {
+                if (job.conclusion === 'failure') {
+                  for (const step of job.steps || []) {
+                    if (step.conclusion === 'failure') {
+                      if (step.name.includes('ruff')) {
+                        category = 'lint';
+                        suggestion = 'Run `uv run ruff check --fix` and `uv run ruff format` locally to fix linting issues.';
+                      } else if (step.name.includes('codespell')) {
+                        category = 'spell';
+                        suggestion = 'Run `uv run codespell --write-changes` locally to fix spelling issues.';
+                      } else if (step.name.includes('mypy') || step.name.includes('pyright')) {
+                        category = 'type';
+                        suggestion = 'Run `uv run mypy` and `uv run pyright` locally to fix type checking issues.';
+                      }
+                    }
+                  }
+                }
+              }
+            } else if (workflowName === 'Tests') {
+              category = 'test';
+              suggestion = 'Run `uv run tox` locally to reproduce test failures. Check the test logs above for details.';
+            } else if (workflowName === 'Compatibility Matrix') {
+              category = 'compat';
+              suggestion = 'This may be a compatibility issue with a specific Python version or dependency combination. Check the matrix job logs for details.';
+            } else if (workflowName === 'Benchmarks') {
+              category = 'perf';
+              suggestion = 'Benchmark suite failed to run. This is likely a configuration issue, not a performance regression. Check the logs above.';
+            }
+
+            if (category === 'unknown') {
+              category = 'ci';
+              suggestion = 'An unexpected CI failure occurred. Check the workflow run logs for details.';
+            }
+
+            // Find the associated PR
+            const prs = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              head: `${context.repo.owner}:${run.head_branch}`,
+            });
+
+            if (prs.data.length === 0) {
+              console.log('No open PR found for this branch');
+              return;
+            }
+
+            const pr = prs.data[0];
+
+            // Post attribution comment
+            const body = `## 🔍 CI Failure Attribution
+
+            **Category:** \`${category}\`
+            **Workflow:** ${workflowName}
+            **[View full logs](${run.html_url})**
+
+            ### Suggested Fix
+            ${suggestion}
+
+            ---
+            <sub>🤖 Auto-attributed by Failure Attribution workflow</sub>`;
+
+            // Check if we already posted a comment
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+            });
+
+            const existing = comments.data.find(
+              c => c.body.includes('CI Failure Attribution') &&
+                   c.body.includes(workflowName)
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body,
+              });
+            }

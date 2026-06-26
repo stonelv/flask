@@ -1,23 +1,24 @@
 from __future__ import annotations
 
-import contextvars
 import typing as t
 from functools import update_wrapper
-from types import TracebackType
 
 from werkzeug.exceptions import HTTPException
-from werkzeug.routing import MapAdapter
 
-from . import typing as ft
 from .globals import _cv_app
 from .helpers import _CollectErrors
 from .signals import appcontext_popped
 from .signals import appcontext_pushed
 
 if t.TYPE_CHECKING:
+    import contextvars
+    from types import TracebackType
+
     import typing_extensions as te
     from _typeshed.wsgi import WSGIEnvironment
+    from werkzeug.routing import MapAdapter
 
+    from . import typing as ft
     from .app import Flask
     from .sessions import SessionMixin
     from .wrappers import Request

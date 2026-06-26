@@ -10,7 +10,6 @@ from datetime import timedelta
 from functools import update_wrapper
 from inspect import iscoroutinefunction
 from itertools import chain
-from types import TracebackType
 from urllib.parse import quote as _url_quote
 
 import click
@@ -49,14 +48,16 @@ from .signals import got_request_exception
 from .signals import request_finished
 from .signals import request_started
 from .signals import request_tearing_down
-from .templating import Environment
 from .wrappers import Request
 from .wrappers import Response
 
 if t.TYPE_CHECKING:  # pragma: no cover
+    from types import TracebackType
+
     from _typeshed.wsgi import StartResponse
     from _typeshed.wsgi import WSGIEnvironment
 
+    from .templating import Environment
     from .testing import FlaskClient
     from .testing import FlaskCliRunner
     from .typing import HeadersValue
@@ -408,7 +409,7 @@ class Flask(App):
         # call it here so it works for blueprints too.
         max_age = self.get_send_file_max_age(filename)
         return send_from_directory(
-            t.cast(str, self.static_folder), filename, max_age=max_age
+            t.cast("str", self.static_folder), filename, max_age=max_age
         )
 
     def open_resource(
@@ -724,10 +725,7 @@ class Flask(App):
             sn_host, _, sn_port = server_name.partition(":")
 
         if not host:
-            if sn_host:
-                host = sn_host
-            else:
-                host = "127.0.0.1"
+            host = sn_host or "127.0.0.1"
 
         if port or port == 0:
             port = int(port)
@@ -745,7 +743,7 @@ class Flask(App):
         from werkzeug.serving import run_simple
 
         try:
-            run_simple(t.cast(str, host), port, self, **options)
+            run_simple(t.cast("str", host), port, self, **options)
         finally:
             # reset the first request information if the development server
             # reset normally.  This makes it possible to restart the server
@@ -1312,7 +1310,7 @@ class Flask(App):
 
         # make sure the body is an instance of the response class
         if not isinstance(rv, self.response_class):
-            if isinstance(rv, (str, bytes, bytearray)) or isinstance(rv, cabc.Iterator):
+            if isinstance(rv, (str, bytes, bytearray, cabc.Iterator)):
                 # let the response class set the status and headers instead of
                 # waiting to do it manually, so that the class can handle any
                 # special logic
@@ -1349,7 +1347,7 @@ class Flask(App):
                     f" {type(rv).__name__}."
                 )
 
-        rv = t.cast(Response, rv)
+        rv = t.cast("Response", rv)
         # prefer the status if it was provided
         if status is not None:
             if isinstance(status, (str, bytes, bytearray)):

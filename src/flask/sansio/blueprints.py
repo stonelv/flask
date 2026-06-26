@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import typing as t
 from collections import defaultdict
 from functools import update_wrapper
@@ -12,6 +11,8 @@ from .scaffold import Scaffold
 from .scaffold import setupmethod
 
 if t.TYPE_CHECKING:  # pragma: no cover
+    import os
+
     from .app import App
 
 DeferredSetupFunction = t.Callable[["BlueprintSetupState"], None]
@@ -390,7 +391,7 @@ class Blueprint(Scaffold):
             value = defaultdict(
                 dict,
                 {
-                    code: {exc_class: func for exc_class, func in code_values.items()}
+                    code: dict(code_values.items())
                     for code, code_values in value.items()
                 },
             )

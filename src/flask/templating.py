@@ -7,13 +7,13 @@ from jinja2 import Environment as BaseEnvironment
 from jinja2 import Template
 from jinja2 import TemplateNotFound
 
-from .ctx import AppContext
 from .globals import app_ctx
 from .helpers import stream_with_context
 from .signals import before_render_template
 from .signals import template_rendered
 
 if t.TYPE_CHECKING:  # pragma: no cover
+    from .ctx import AppContext
     from .sansio.app import App
     from .sansio.scaffold import Scaffold
 

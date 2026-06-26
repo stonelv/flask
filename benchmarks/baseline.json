@@ -1,0 +1,254 @@
+{
+  "benchmarks": [
+    {
+      "name": "test_app_creation_minimal",
+      "stats": {
+        "mean": 0.00011536535004818009,
+        "stddev": 8.404297138548533e-05,
+        "median": 0.000109500004327856,
+        "ops": 8668.113949139577,
+        "rounds": 2272
+      }
+    },
+    {
+      "name": "test_app_creation_with_config",
+      "stats": {
+        "mean": 0.00011620186991361054,
+        "stddev": 1.7042313746550706e-05,
+        "median": 0.00011083400022471324,
+        "ops": 8605.71349448544,
+        "rounds": 8017
+      }
+    },
+    {
+      "name": "test_app_creation_with_blueprint",
+      "stats": {
+        "mean": 0.00030308579859663373,
+        "stddev": 9.863070484818601e-05,
+        "median": 0.0002884999994421378,
+        "ops": 3299.3957639396526,
+        "rounds": 2443
+      }
+    },
+    {
+      "name": "test_jsonify_simple_dict",
+      "stats": {
+        "mean": 7.580741129931993e-05,
+        "stddev": 1.324207441436433e-05,
+        "median": 7.345850099227391e-05,
+        "ops": 13191.322363608675,
+        "rounds": 1250
+      }
+    },
+    {
+      "name": "test_jsonify_nested_dict",
+      "stats": {
+        "mean": 8.401962745463953e-05,
+        "stddev": 1.478763262191415e-05,
+        "median": 8.225000055972487e-05,
+        "ops": 11901.980885833844,
+        "rounds": 7197
+      }
+    },
+    {
+      "name": "test_jsonify_list",
+      "stats": {
+        "mean": 8.6828167462801e-05,
+        "stddev": 9.980949603481624e-06,
+        "median": 8.524999429937452e-05,
+        "ops": 11516.999946226217,
+        "rounds": 7214
+      }
+    },
+    {
+      "name": "test_json_encode_decode",
+      "stats": {
+        "mean": 1.0441816176765286e-05,
+        "stddev": 1.3598138802975752e-06,
+        "median": 1.0249998013023287e-05,
+        "ops": 95768.78036075374,
+        "rounds": 32967
+      }
+    },
+    {
+      "name": "test_simple_request_cycle",
+      "stats": {
+        "mean": 7.115970843523174e-05,
+        "stddev": 1.0765911363214063e-05,
+        "median": 6.929100345587358e-05,
+        "ops": 14052.89625252163,
+        "rounds": 5953
+      }
+    },
+    {
+      "name": "test_request_with_before_after",
+      "stats": {
+        "mean": 7.436314159844847e-05,
+        "stddev": 1.0484098734759038e-05,
+        "median": 7.229200127767399e-05,
+        "ops": 13447.522233526297,
+        "rounds": 7982
+      }
+    },
+    {
+      "name": "test_request_with_teardown",
+      "stats": {
+        "mean": 7.265041428410864e-05,
+        "stddev": 1.0183011289450886e-05,
+        "median": 7.070800347719342e-05,
+        "ops": 13764.546422121883,
+        "rounds": 8526
+      }
+    },
+    {
+      "name": "test_request_with_multiple_hooks",
+      "stats": {
+        "mean": 7.61182529723664e-05,
+        "stddev": 1.1260165395812118e-05,
+        "median": 7.429100514855236e-05,
+        "ops": 13137.453382739028,
+        "rounds": 7612
+      }
+    },
+    {
+      "name": "test_simple_route_match",
+      "stats": {
+        "mean": 7.061825561397063e-05,
+        "stddev": 1.0237038886855596e-05,
+        "median": 6.845800089649856e-05,
+        "ops": 14160.644316484177,
+        "rounds": 8821
+      }
+    },
+    {
+      "name": "test_parameterized_route_match",
+      "stats": {
+        "mean": 7.431770600676448e-05,
+        "stddev": 1.043661761580394e-05,
+        "median": 7.216600351966918e-05,
+        "ops": 13455.743640808543,
+        "rounds": 5275
+      }
+    },
+    {
+      "name": "test_complex_routing",
+      "stats": {
+        "mean": 7.506965631412305e-05,
+        "stddev": 1.0385206806424033e-05,
+        "median": 7.30419997125864e-05,
+        "ops": 13320.961478970663,
+        "rounds": 7600
+      }
+    },
+    {
+      "name": "test_route_404",
+      "stats": {
+        "mean": 9.947638536802766e-05,
+        "stddev": 8.491614839124777e-05,
+        "median": 8.86249981704168e-05,
+        "ops": 10052.63707864285,
+        "rounds": 5657
+      }
+    },
+    {
+      "name": "test_session_save",
+      "stats": {
+        "mean": 0.0001415188863667492,
+        "stddev": 1.1704320774295845e-05,
+        "median": 0.00014004099648445845,
+        "ops": 7066.194666120243,
+        "rounds": 3704
+      }
+    },
+    {
+      "name": "test_session_load",
+      "stats": {
+        "mean": 0.00010912597493625768,
+        "stddev": 1.198929142263135e-05,
+        "median": 0.00010679099796107039,
+        "ops": 9163.721108417283,
+        "rounds": 7461
+      }
+    },
+    {
+      "name": "test_session_modify",
+      "stats": {
+        "mean": 0.00014331875457993085,
+        "stddev": 1.5913189453756467e-05,
+        "median": 0.00013999999646330252,
+        "ops": 6977.453878461429,
+        "rounds": 5791
+      }
+    },
+    {
+      "name": "test_signal_request_started",
+      "stats": {
+        "mean": 7.211036518396358e-05,
+        "stddev": 1.0107805981073179e-05,
+        "median": 7.020799966994673e-05,
+        "ops": 13867.631892431287,
+        "rounds": 7139
+      }
+    },
+    {
+      "name": "test_signal_request_finished",
+      "stats": {
+        "mean": 7.561718394419159e-05,
+        "stddev": 1.1314592475429798e-05,
+        "median": 7.34169952920638e-05,
+        "ops": 13224.507285778305,
+        "rounds": 8709
+      }
+    },
+    {
+      "name": "test_signal_multiple_listeners",
+      "stats": {
+        "mean": 7.914696041136607e-05,
+        "stddev": 1.416927451087105e-05,
+        "median": 7.675000233575702e-05,
+        "ops": 12634.723997011424,
+        "rounds": 7552
+      }
+    },
+    {
+      "name": "test_render_template_string_simple",
+      "stats": {
+        "mean": 0.0001016154597982071,
+        "stddev": 9.86030479918974e-06,
+        "median": 9.979100286727771e-05,
+        "ops": 9841.0222419487,
+        "rounds": 1651
+      }
+    },
+    {
+      "name": "test_render_template_string_with_loop",
+      "stats": {
+        "mean": 0.00018017757266244265,
+        "stddev": 1.0690717787993811e-05,
+        "median": 0.00017741700139595196,
+        "ops": 5550.080319227468,
+        "rounds": 4023
+      }
+    },
+    {
+      "name": "test_render_template_string_with_conditionals",
+      "stats": {
+        "mean": 0.00015378739855675285,
+        "stddev": 1.1159121228884208e-05,
+        "median": 0.00015187499957391992,
+        "ops": 6502.483359395442,
+        "rounds": 3893
+      }
+    },
+    {
+      "name": "test_render_template_string_with_filters",
+      "stats": {
+        "mean": 0.00022797182797999524,
+        "stddev": 0.0001054521167136351,
+        "median": 0.00022162499953992665,
+        "ops": 4386.506915616569,
+        "rounds": 2976
+      }
+    }
+  ]
+}

@@ -11,7 +11,6 @@ from pathlib import Path
 
 import click
 import pytest
-from _pytest.monkeypatch import notset
 from click.testing import CliRunner
 
 from flask import Blueprint
@@ -109,27 +108,31 @@ def test_find_best_app(test_apps):
     class Module:
         pass
 
-    pytest.raises(NoAppException, find_best_app, Module)
+    with pytest.raises(NoAppException):
+        find_best_app(Module)
 
     class Module:
         myapp1 = Flask("appname1")
         myapp2 = Flask("appname2")
 
-    pytest.raises(NoAppException, find_best_app, Module)
+    with pytest.raises(NoAppException):
+        find_best_app(Module)
 
     class Module:
         @staticmethod
         def create_app(foo, bar):
             return Flask("appname2")
 
-    pytest.raises(NoAppException, find_best_app, Module)
+    with pytest.raises(NoAppException):
+        find_best_app(Module)
 
     class Module:
         @staticmethod
         def create_app():
             raise TypeError("bad bad factory!")
 
-    pytest.raises(TypeError, find_best_app, Module)
+    with pytest.raises(TypeError):
+        find_best_app(Module)
 
 
 @pytest.mark.parametrize(
@@ -238,7 +241,7 @@ def test_get_version(test_apps, capsys):
 
     ctx = MockCtx()
     get_version(ctx, None, "test")
-    out, err = capsys.readouterr()
+    out, _err = capsys.readouterr()
     assert f"Python {platform.python_version()}" in out
     assert f"Flask {importlib.metadata.version('flask')}" in out
     assert f"Werkzeug {importlib.metadata.version('werkzeug')}" in out
@@ -271,7 +274,8 @@ def test_scriptinfo(test_apps, monkeypatch):
     assert obj.load_app() is app
 
     obj = ScriptInfo()
-    pytest.raises(NoAppException, obj.load_app)
+    with pytest.raises(NoAppException):
+        obj.load_app()
 
     # import app from wsgi.py in current directory
     monkeypatch.chdir(test_path / "helloworld")
@@ -535,9 +539,9 @@ need_dotenv = pytest.mark.skipif(
 
 @need_dotenv
 def test_load_dotenv(monkeypatch):
-    # can't use monkeypatch.delitem since the keys don't exist yet
+    # Delete env vars if they exist, and track for cleanup
     for item in ("FOO", "BAR", "SPAM", "HAM"):
-        monkeypatch._setitem.append((os.environ, item, notset))
+        monkeypatch.delenv(item, raising=False)
 
     monkeypatch.setenv("EGGS", "3")
     monkeypatch.chdir(test_path)
@@ -559,8 +563,9 @@ def test_load_dotenv(monkeypatch):
 
 @need_dotenv
 def test_dotenv_path(monkeypatch):
+    # Delete env vars if they exist, and track for cleanup
     for item in ("FOO", "BAR", "EGGS"):
-        monkeypatch._setitem.append((os.environ, item, notset))
+        monkeypatch.delenv(item, raising=False)
 
     load_dotenv(test_path / ".flaskenv")
     assert Path.cwd() == cwd

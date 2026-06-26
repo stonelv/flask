@@ -370,19 +370,19 @@ def test_template_filter(app):
         return s[::-1]
 
     app.register_blueprint(bp, url_prefix="/py")
-    assert "my_reverse" in app.jinja_env.filters.keys()
+    assert "my_reverse" in app.jinja_env.filters
     assert app.jinja_env.filters["my_reverse"] == my_reverse
     assert app.jinja_env.filters["my_reverse"]("abcd") == "dcba"
 
-    assert "my_reverse_2" in app.jinja_env.filters.keys()
+    assert "my_reverse_2" in app.jinja_env.filters
     assert app.jinja_env.filters["my_reverse_2"] == my_reverse_2
     assert app.jinja_env.filters["my_reverse_2"]("abcd") == "dcba"
 
-    assert "my_reverse_custom_name_3" in app.jinja_env.filters.keys()
+    assert "my_reverse_custom_name_3" in app.jinja_env.filters
     assert app.jinja_env.filters["my_reverse_custom_name_3"] == my_reverse_3
     assert app.jinja_env.filters["my_reverse_custom_name_3"]("abcd") == "dcba"
 
-    assert "my_reverse_custom_name_4" in app.jinja_env.filters.keys()
+    assert "my_reverse_custom_name_4" in app.jinja_env.filters
     assert app.jinja_env.filters["my_reverse_custom_name_4"] == my_reverse_4
     assert app.jinja_env.filters["my_reverse_custom_name_4"]("abcd") == "dcba"
 
@@ -395,7 +395,7 @@ def test_add_template_filter(app):
 
     bp.add_app_template_filter(my_reverse)
     app.register_blueprint(bp, url_prefix="/py")
-    assert "my_reverse" in app.jinja_env.filters.keys()
+    assert "my_reverse" in app.jinja_env.filters
     assert app.jinja_env.filters["my_reverse"] == my_reverse
     assert app.jinja_env.filters["my_reverse"]("abcd") == "dcba"
 
@@ -408,7 +408,7 @@ def test_template_filter_with_name(app):
         return s[::-1]
 
     app.register_blueprint(bp, url_prefix="/py")
-    assert "strrev" in app.jinja_env.filters.keys()
+    assert "strrev" in app.jinja_env.filters
     assert app.jinja_env.filters["strrev"] == my_reverse
     assert app.jinja_env.filters["strrev"]("abcd") == "dcba"
 
@@ -421,7 +421,7 @@ def test_add_template_filter_with_name(app):
 
     bp.add_app_template_filter(my_reverse, "strrev")
     app.register_blueprint(bp, url_prefix="/py")
-    assert "strrev" in app.jinja_env.filters.keys()
+    assert "strrev" in app.jinja_env.filters
     assert app.jinja_env.filters["strrev"] == my_reverse
     assert app.jinja_env.filters["strrev"]("abcd") == "dcba"
 
@@ -530,19 +530,19 @@ def test_template_test(app):
         return isinstance(value, bool)
 
     app.register_blueprint(bp, url_prefix="/py")
-    assert "is_boolean" in app.jinja_env.tests.keys()
+    assert "is_boolean" in app.jinja_env.tests
     assert app.jinja_env.tests["is_boolean"] == is_boolean
     assert app.jinja_env.tests["is_boolean"](False)
 
-    assert "boolean_2" in app.jinja_env.tests.keys()
+    assert "boolean_2" in app.jinja_env.tests
     assert app.jinja_env.tests["boolean_2"] == boolean_2
     assert app.jinja_env.tests["boolean_2"](False)
 
-    assert "my_boolean_custom_name" in app.jinja_env.tests.keys()
+    assert "my_boolean_custom_name" in app.jinja_env.tests
     assert app.jinja_env.tests["my_boolean_custom_name"] == boolean_3
     assert app.jinja_env.tests["my_boolean_custom_name"](False)
 
-    assert "my_boolean_custom_name_2" in app.jinja_env.tests.keys()
+    assert "my_boolean_custom_name_2" in app.jinja_env.tests
     assert app.jinja_env.tests["my_boolean_custom_name_2"] == boolean_4
     assert app.jinja_env.tests["my_boolean_custom_name_2"](False)
 
@@ -555,7 +555,7 @@ def test_add_template_test(app):
 
     bp.add_app_template_test(is_boolean)
     app.register_blueprint(bp, url_prefix="/py")
-    assert "is_boolean" in app.jinja_env.tests.keys()
+    assert "is_boolean" in app.jinja_env.tests
     assert app.jinja_env.tests["is_boolean"] == is_boolean
     assert app.jinja_env.tests["is_boolean"](False)
 
@@ -568,7 +568,7 @@ def test_template_test_with_name(app):
         return isinstance(value, bool)
 
     app.register_blueprint(bp, url_prefix="/py")
-    assert "boolean" in app.jinja_env.tests.keys()
+    assert "boolean" in app.jinja_env.tests
     assert app.jinja_env.tests["boolean"] == is_boolean
     assert app.jinja_env.tests["boolean"](False)
 
@@ -581,7 +581,7 @@ def test_add_template_test_with_name(app):
 
     bp.add_app_template_test(is_boolean, "boolean")
     app.register_blueprint(bp, url_prefix="/py")
-    assert "boolean" in app.jinja_env.tests.keys()
+    assert "boolean" in app.jinja_env.tests
     assert app.jinja_env.tests["boolean"] == is_boolean
     assert app.jinja_env.tests["boolean"](False)
 
@@ -731,23 +731,23 @@ def test_template_global(app):
         return "get_stuff_3"
 
     # Make sure the function is not in the jinja_env already
-    assert "get_answer" not in app.jinja_env.globals.keys()
+    assert "get_answer" not in app.jinja_env.globals
     app.register_blueprint(bp)
 
     # Tests
-    assert "get_answer" in app.jinja_env.globals.keys()
+    assert "get_answer" in app.jinja_env.globals
     assert app.jinja_env.globals["get_answer"] is get_answer
     assert app.jinja_env.globals["get_answer"]() == 42
 
-    assert "get_stuff_1" in app.jinja_env.globals.keys()
+    assert "get_stuff_1" in app.jinja_env.globals
     assert app.jinja_env.globals["get_stuff_1"] == get_stuff_1
     assert app.jinja_env.globals["get_stuff_1"](), "get_stuff_1"
 
-    assert "my_get_stuff_custom_name_2" in app.jinja_env.globals.keys()
+    assert "my_get_stuff_custom_name_2" in app.jinja_env.globals
     assert app.jinja_env.globals["my_get_stuff_custom_name_2"] == get_stuff_2
     assert app.jinja_env.globals["my_get_stuff_custom_name_2"](), "get_stuff_2"
 
-    assert "my_get_stuff_custom_name_3" in app.jinja_env.globals.keys()
+    assert "my_get_stuff_custom_name_3" in app.jinja_env.globals
     assert app.jinja_env.globals["my_get_stuff_custom_name_3"] == get_stuff_3
     assert app.jinja_env.globals["my_get_stuff_custom_name_3"](), "get_stuff_3"
 
@@ -933,7 +933,7 @@ def test_nested_callback_order(app, client):
 
     @app.context_processor
     def app_ctx():
-        return dict(key="app")
+        return {"key": "app"}
 
     @parent.before_request
     def parent_before1():
@@ -953,7 +953,7 @@ def test_nested_callback_order(app, client):
 
     @parent.context_processor
     def parent_ctx():
-        return dict(key="parent")
+        return {"key": "parent"}
 
     @child.before_request
     def child_before1():
@@ -973,7 +973,7 @@ def test_nested_callback_order(app, client):
 
     @child.context_processor
     def child_ctx():
-        return dict(key="child")
+        return {"key": "child"}
 
     @child.route("/a")
     def a():

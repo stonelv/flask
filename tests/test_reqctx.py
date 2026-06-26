@@ -1,15 +1,19 @@
 from __future__ import annotations
 
-import collections.abc as cabc
 import warnings
 from concurrent import futures
+from typing import TYPE_CHECKING
 
 import pytest
 
 import flask
 from flask.sessions import SecureCookieSessionInterface
 from flask.sessions import SessionInterface
-from flask.testing import FlaskClient
+
+if TYPE_CHECKING:
+    import collections.abc as cabc
+
+    from flask.testing import FlaskClient
 
 
 def test_teardown_on_pop(app):

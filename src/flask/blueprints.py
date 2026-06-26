@@ -8,7 +8,7 @@ from .cli import AppGroup
 from .globals import current_app
 from .helpers import send_from_directory
 from .sansio.blueprints import Blueprint as SansioBlueprint
-from .sansio.blueprints import BlueprintSetupState as BlueprintSetupState  # noqa
+from .sansio.blueprints import BlueprintSetupState as BlueprintSetupState
 from .sansio.scaffold import _sentinel
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -98,7 +98,7 @@ class Blueprint(SansioBlueprint):
         # call it here so it works for blueprints too.
         max_age = self.get_send_file_max_age(filename)
         return send_from_directory(
-            t.cast(str, self.static_folder), filename, max_age=max_age
+            t.cast("str", self.static_folder), filename, max_age=max_age
         )
 
     def open_resource(

@@ -1,18 +1,18 @@
 from __future__ import annotations
 
 import ast
-import collections.abc as cabc
+import contextlib
 import importlib.metadata
 import inspect
 import os
 import platform
 import re
+import ssl
 import sys
 import traceback
 import typing as t
 from functools import update_wrapper
 from operator import itemgetter
-from types import ModuleType
 
 import click
 from click.core import ParameterSource
@@ -25,7 +25,8 @@ from .helpers import get_debug_flag
 from .helpers import get_load_dotenv
 
 if t.TYPE_CHECKING:
-    import ssl
+    import collections.abc as cabc
+    from types import ModuleType
 
     from _typeshed.wsgi import StartResponse
     from _typeshed.wsgi import WSGIApplication
@@ -343,7 +344,7 @@ class ScriptInfo:
         else:
             if self.app_import_path:
                 path, name = (
-                    re.split(r":(?![\\/])", self.app_import_path, maxsplit=1) + [None]
+                    [*re.split(r":(?![\\/])", self.app_import_path, maxsplit=1), None]
                 )[:2]
                 import_name = prepare_import(path)
                 app = locate_app(import_name, name)
@@ -1093,10 +1094,8 @@ def routes_command(sort: str, all_methods: bool) -> None:
     headers.append("Rule")
     sorts.append("rule")
 
-    try:
+    with contextlib.suppress(ValueError):
         rows.sort(key=itemgetter(sorts.index(sort)))
-    except ValueError:
-        pass
 
     rows.insert(0, headers)
     widths = [max(len(row[i]) for row in rows) for i in range(len(headers))]

@@ -8,7 +8,9 @@ from flask import jsonify
 from flask import stream_template
 from flask.templating import render_template
 from flask.views import View
-from flask.wrappers import Response
+
+if t.TYPE_CHECKING:
+    from flask.wrappers import Response
 
 app = Flask(__name__)
 

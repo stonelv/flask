@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import typing as t
 
-from jinja2.loaders import BaseLoader
 from werkzeug.routing import RequestRedirect
 
 from .blueprints import Blueprint
@@ -10,6 +9,8 @@ from .globals import _cv_app
 from .sansio.app import App
 
 if t.TYPE_CHECKING:
+    from jinja2.loaders import BaseLoader
+
     from .sansio.scaffold import Scaffold
     from .wrappers import Request
 

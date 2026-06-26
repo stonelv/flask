@@ -175,9 +175,8 @@ def test_session_transactions_no_null_sessions():
     app = flask.Flask(__name__)
 
     with app.test_client() as c:
-        with pytest.raises(RuntimeError) as e:
-            with c.session_transaction():
-                pass
+        with pytest.raises(RuntimeError) as e, c.session_transaction():
+            pass
         assert "Session backend did not open a session" in str(e.value)
 
 
@@ -302,8 +301,8 @@ def test_subdomain():
     with client:
         response = client.get(url)
 
-    assert 200 == response.status_code
-    assert b"xxx" == response.data
+    assert response.status_code == 200
+    assert response.data == b"xxx"
 
 
 def test_nosubdomain(app, client):
@@ -319,8 +318,8 @@ def test_nosubdomain(app, client):
     with client:
         response = client.get(url)
 
-    assert 200 == response.status_code
-    assert b"xxx" == response.data
+    assert response.status_code == 200
+    assert response.data == b"xxx"
 
 
 def test_cli_runner_class(app):

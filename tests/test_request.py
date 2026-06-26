@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from flask import Flask
 from flask import Request
 from flask import request
-from flask.testing import FlaskClient
+
+if TYPE_CHECKING:
+    from flask.testing import FlaskClient
 
 
 def test_max_content_length(app: Flask, client: FlaskClient) -> None:
