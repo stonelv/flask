@@ -27,11 +27,15 @@ CI is layered:
 - **Full matrix** (`tests.yaml`): unchanged — remains the source of truth for
   compatibility, plus the `typing` job.
 - **Performance gate** (`benchmarks.yaml`): on PRs it runs the `benchmarks/`
-  suite with `pytest-benchmark` and compares against the baseline cached from
-  `main`, annotating the run; on push to `main` it refreshes that baseline.
-  Comparison is **advisory by default** (the compare step is
-  `continue-on-error`) because shared runners are noisy — flip it to blocking
-  once a team has a stable runner.
+  suite with `pytest-benchmark`. Because absolute timings are
+  environment-specific, it does **not** compare against a stored cross-machine
+  baseline; instead it benchmarks the base commit in a worktree on the *same
+  runner* and compares head-vs-base. `compare.py` reports per-benchmark noise
+  (relative std-dev), compares medians, and with `--ignore-within-noise`
+  suppresses deltas smaller than the runs' combined noise. Blocking is
+  controlled by the `PERF_ENFORCE` repository variable (advisory by default,
+  since shared runners are noisy). The gate logic is unit-tested in
+  `tests/test_perf_compare.py`.
 - **Failure attribution**: `tests.yaml` gains an `if: failure()` step that runs
   `scripts/triage_failures.py`, mapping each failing test to its most recent
   author/module via `git blame` and writing a grouped `$GITHUB_STEP_SUMMARY`.
@@ -42,10 +46,11 @@ and shared `concurrency` groups keep runs from overlapping.
 ## Consequences
 
 - Good: contributors get near-instant signal; perf regressions are caught
-  mechanically; triage of red builds is faster.
-- Cost: benchmark numbers are noisy on shared runners — mitigated by a 10%
-  threshold, sufficient `--benchmark-min-rounds`, and keeping the compare step
-  advisory until a stable runner is available.
+  mechanically against a same-environment baseline; triage of red builds is
+  faster.
+- Cost: benchmark numbers are noisy on shared runners — mitigated by
+  same-runner comparison, median + noise-aware thresholding, and keeping the
+  gate advisory (`PERF_ENFORCE=false`) until a dedicated runner is available.
 
 ## Alternatives considered
 

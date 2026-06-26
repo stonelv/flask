@@ -25,12 +25,8 @@ if [[ -n "$(git status --porcelain)" ]]; then
     fail "working tree is not clean; commit or stash first"
 fi
 
-# 2. read + validate version
-VERSION="$(uv run --no-default-groups python -c '
-import tomllib, pathlib
-data = tomllib.loads(pathlib.Path("pyproject.toml").read_text())
-print(data["project"]["version"])
-')"
+# 2. read + validate version (grep, so the script needs only bash + git)
+VERSION="$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)"
 echo "==> pyproject version: ${VERSION}"
 
 if [[ "$VERSION" == *dev* ]]; then

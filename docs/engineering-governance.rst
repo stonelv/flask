@@ -14,10 +14,10 @@ Components
 Area                          Where                                        How it runs
 ============================  ===========================================  ==============================
 One-click developer flow      ``Makefile``, ``scripts/``                   ``make bootstrap|dev|test|perf``
-Fast CI lane                  ``.github/workflows/ci-fast.yaml``           lint + format + smoke + example
+Fast CI lane                  ``.github/workflows/ci-fast.yaml``           lint + format + smoke + extension
 Full compatibility matrix     ``.github/workflows/tests.yaml``             unchanged matrix + failure triage
 Performance gate              ``.github/workflows/benchmarks.yaml``        ``benchmarks/`` vs baseline
-Observability (opt-in)        ``examples/observability/``                  isolated env, in-memory tested
+Observability extension       ``extensions/flask-telemetry/``              installable pkg, in-memory tested
 Release governance            ``.github/workflows/publish.yaml``           verify tag/notes, validate, publish
 Rollback                      ``scripts/rollback.sh``                      yank + tag/release teardown
 ============================  ===========================================  ==============================
@@ -46,7 +46,7 @@ Risk                                            Severity  Mitigation
 Benchmark noise on shared runners               Medium    median comparison, 10% threshold, advisory by
                                                           default; ``PERF_ENFORCE`` opt-in for stable runners
 Baseline JSON bloat in git                      Medium    ``trim_baseline.py`` keeps only summary stats (~3 KB)
-OTel deps leaking into core                     High→ok   isolated ``examples/observability`` project + grep gate
+OTel deps leaking into core                     High→ok   isolated ``extensions/flask-telemetry`` package + grep gate
 Auto-changelog breaking Pallets convention      High→ok   validate-only ``release-guard``; no generation
 ``git blame`` triage on shallow checkout        Low       triage job uses ``fetch-depth: 0``; degrades to plain
                                                           list if blame unavailable; never fails the build
@@ -68,8 +68,9 @@ Acceptance criteria
 - ``benchmarks/baseline/baseline.json`` is a trimmed (~KB) summary, not the raw
   multi-MB run.
 - ``tests/test_triage.py`` exercises the failure-attribution helper.
-- ``examples/observability/test_otel.py`` proves spans and metrics are emitted
-  using in-memory exporters; the core lock has no OTel deps.
+- ``extensions/flask-telemetry`` is an installable extension whose tests prove
+  spans and metrics are emitted using in-memory exporters; the core lock has no
+  OTel deps.
 - ``publish.yaml`` blocks when the tag and ``pyproject`` version disagree, builds
   reproducibly, validates artifacts with ``twine check --strict``, and attaches
   changelog-derived notes to a **draft** release before PyPI upload.
@@ -88,8 +89,8 @@ The work is additive and lands in independent, revertible steps:
    ``benchmarks.yaml`` (advisory; flip ``PERF_ENFORCE`` to enforce later).
 #. **Failure triage**: ``scripts/triage_failures.py`` + ``tests/test_triage.py``
    + the ``if: failure()`` step in ``tests.yaml``.
-#. **Observability**: ``examples/observability/`` with an in-memory-exporter
-   test and a dedicated CI job.
+#. **Observability**: ``extensions/flask-telemetry`` installable extension with
+   in-memory-exporter tests and a dedicated CI job.
 #. **Release governance**: ``publish.yaml`` verify/validate/notes jobs,
    ``release.sh``, ``changelog_extract.py``, ``rollback.sh``,
    ``docs/release-process.rst``.
