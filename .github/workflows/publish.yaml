@@ -48,6 +48,12 @@ jobs:
           python-version-file: pyproject.toml
       - run: echo "SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)" >> $GITHUB_ENV
       - run: uv build
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS.txt
+          echo "Generated checksums:"
+          cat SHA256SUMS.txt
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         id: upload-artifact
         with:
@@ -121,6 +127,15 @@ jobs:
             fi
           fi
       - name: Create release
-        run: gh release create --draft --repo ${GITHUB_REPOSITORY} --notes-file release_notes.md ${GITHUB_REF_NAME} dist/*
+        run: |
+          # Verify checksums before release
+          cd dist
+          if [ -f SHA256SUMS.txt ]; then
+            echo "Verifying artifact integrity..."
+            sha256sum -c SHA256SUMS.txt || exit 1
+            echo "✓ All checksums verified"
+          fi
+          cd ..
+          gh release create --draft --repo ${GITHUB_REPOSITORY} --notes-file release_notes.md ${GITHUB_REF_NAME} dist/*
         env:
           GH_TOKEN: ${{ github.token }}

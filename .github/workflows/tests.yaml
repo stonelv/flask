@@ -87,22 +87,29 @@ jobs:
             echo "::error::coverage.xml not found"
             exit 1
           fi
-          COVERAGE=$(python3 -c "
+          python3 << 'EOF'
           import xml.etree.ElementTree as ET
           import sys
+
+          THRESHOLD = 90.0
+
           try:
               tree = ET.parse('coverage.xml')
               root = tree.getroot()
               rate = float(root.attrib.get('line-rate', 0))
-              print(f'{rate * 100:.2f}')
+              coverage = rate * 100
+
+              print(f"Coverage: {coverage:.2f}%")
+              print(f"Threshold: {THRESHOLD}%")
+
+              if coverage < THRESHOLD:
+                  print(f"::error::Coverage {coverage:.2f}% is below threshold {THRESHOLD}%")
+                  sys.exit(1)
+              else:
+                  print(f"✓ Coverage check passed: {coverage:.2f}% >= {THRESHOLD}%")
+                  sys.exit(0)
+
           except Exception as e:
-              print(f'Error parsing coverage.xml: {e}', file=sys.stderr)
+              print(f"::error::Error parsing coverage.xml: {e}")
               sys.exit(1)
-          ")
-          echo "Coverage: ${COVERAGE}%"
-          THRESHOLD=90
-          if [ $(echo "$COVERAGE < $THRESHOLD" | bc -l) -eq 1 ]; then
-            echo "::error::Coverage ${COVERAGE}% is below threshold ${THRESHOLD}%"
-            exit 1
-          fi
-          echo "✓ Coverage check passed: ${COVERAGE}% >= ${THRESHOLD}%"
+          EOF

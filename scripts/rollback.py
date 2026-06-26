@@ -125,12 +125,48 @@ def revert_version_commit(version: str, dry_run: bool = False) -> None:
         print("  git revert --continue")
 
 
+def validate_version(version: str) -> bool:
+    """Validate version format (e.g., 3.1.0)."""
+    pattern = r"^\d+\.\d+\.\d+([.-](dev|rc|alpha|beta)\d*)?$"
+    return bool(re.match(pattern, version))
+
+
+def check_version_exists_on_pypi(version: str) -> bool:
+    """Check if version exists on PyPI."""
+    import urllib.request
+    import urllib.error
+
+    url = f"https://pypi.org/pypi/flask/{version}/json"
+    try:
+        with urllib.request.urlopen(url, timeout=10) as response:
+            return response.status == 200
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return False
+        raise
+
+
 def provide_pypi_instructions(version: str) -> None:
     """Provide instructions for yanking the PyPI release."""
     print("\n" + "=" * 60)
     print("PyPI Release Rollback Instructions")
     print("=" * 60)
     print()
+
+    # Check if version exists on PyPI
+    try:
+        exists = check_version_exists_on_pypi(version)
+        if not exists:
+            print(f"⚠ Version {version} not found on PyPI")
+            print("  (It may not have been published yet, or was already deleted)")
+            print()
+            return
+        print(f"✓ Version {version} found on PyPI")
+        print()
+    except Exception as e:
+        print(f"⚠ Could not verify version on PyPI: {e}")
+        print()
+
     print("To yank (hide) the release from PyPI:")
     print()
     print(f"  1. Go to https://pypi.org/manage/project/flask/release/{version}/")
@@ -139,7 +175,7 @@ def provide_pypi_instructions(version: str) -> None:
     print()
     print("Or use the PyPI API:")
     print()
-    print(f"  curl -X POST https://pypi.org/simple/flask/{version}/ \\")
+    print(f"  curl -X POST https://pypi.org/project/flask/{version}/ \\")
     print(f"    -H 'Authorization: Bearer $PYPI_TOKEN' \\")
     print(f"    -H 'Content-Type: application/json' \\")
     print(f"    -d '{{\"yank\": true, \"yank_comment\": \"Rolled back\"}}'")
@@ -176,6 +212,13 @@ def main():
     args = parser.parse_args()
 
     version = args.version.lstrip("v")
+
+    # Validate version format
+    if not validate_version(version):
+        print(f"Error: Invalid version format: {args.version}")
+        print("Expected format: X.Y.Z (e.g., 3.1.0, 3.1.0.dev, 3.1.0rc1)")
+        sys.exit(1)
+
     print(f"Rolling back version: {version}" + (" (dry-run)" if args.dry_run else "") + "\n")
 
     # Confirm
