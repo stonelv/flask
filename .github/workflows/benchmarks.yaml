@@ -1,0 +1,61 @@
+name: benchmarks
+# Performance regression gate. On PRs it benchmarks the hot paths and compares
+# against the baseline cached from main, annotating the run. On push to main it
+# refreshes that baseline. Comparison is advisory by default because shared
+# runners are noisy (see docs/adr/0003-layered-ci-and-perf-gate.md); flip
+# continue-on-error to false to make it block.
+on:
+  pull_request:
+    paths-ignore: ['docs/**', 'README.md']
+  push:
+    branches: [main]
+    paths-ignore: ['docs/**', 'README.md']
+permissions: {}
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          enable-cache: true
+          prune-cache: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version-file: pyproject.toml
+      - name: restore performance baseline
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: benchmarks/baseline/baseline.json
+          key: perf-baseline-${{ github.sha }}
+          restore-keys: |
+            perf-baseline-
+      - name: run benchmarks
+        run: uv run --no-default-groups --group benchmarks pytest benchmarks/ --benchmark-json=.perf-current.json --benchmark-min-rounds=5 -q
+      - name: compare against baseline
+        id: compare
+        continue-on-error: true
+        run: |
+          if [ -f benchmarks/baseline/baseline.json ]; then
+            uv run --no-default-groups --group benchmarks python benchmarks/compare.py \
+              benchmarks/baseline/baseline.json .perf-current.json \
+              --threshold "${PERF_THRESHOLD:-0.10}" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "no baseline yet; this run will seed it on main." | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: promote current run to baseline (main only)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          mkdir -p benchmarks/baseline
+          cp .perf-current.json benchmarks/baseline/baseline.json
+      - name: save refreshed baseline (main only)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: benchmarks/baseline/baseline.json
+          key: perf-baseline-${{ github.sha }}

@@ -85,5 +85,6 @@ Additional Notes
    design
    extensiondev
    contributing
+   release-process
    license
    changes

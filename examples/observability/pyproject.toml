@@ -1,0 +1,27 @@
+# Standalone project for the observability example. It is intentionally NOT part
+# of the Flask package or its dependency groups: installing Flask never pulls in
+# OpenTelemetry. Run it in its own environment, e.g.
+#
+#   cd examples/observability
+#   uv run --with . python app.py
+#   # or: pip install -e . && python app.py
+[project]
+name = "flask-observability-example"
+version = "0.1.0"
+description = "Opt-in OpenTelemetry (traces, metrics, logs) for a Flask app."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "flask",
+    "opentelemetry-sdk>=1.27",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.27",
+    "opentelemetry-instrumentation-flask>=0.48b0",
+    "opentelemetry-instrumentation-logging>=0.48b0",
+]
+
+[build-system]
+requires = ["flit_core>=3.11,<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.flit.module]
+name = "otel_setup"

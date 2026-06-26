@@ -6,3 +6,9 @@ dist/
 htmlcov/
 .tox/
 docs/_build/
+.venv/
+junit.xml
+.perf-current.json
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/

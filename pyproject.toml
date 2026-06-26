@@ -34,6 +34,10 @@ async = ["asgiref>=3.2"]
 dotenv = ["python-dotenv"]
 
 [dependency-groups]
+benchmarks = [
+    "pytest",
+    "pytest-benchmark",
+]
 dev = [
     "ruff",
     "tox",
@@ -253,6 +257,11 @@ commands = [["sphinx-build", "-E", "-W", "-b", "dirhtml", "docs", "docs/_build/d
 description = "continuously rebuild docs and start a local server"
 dependency_groups = ["docs", "docs-auto"]
 commands = [["sphinx-autobuild", "-W", "-b", "dirhtml", "--watch", "src", "docs", "docs/_build/dirhtml"]]
+
+[tool.tox.env.perf]
+description = "run benchmarks and compare against the committed baseline"
+dependency_groups = ["benchmarks"]
+commands = [["bash", "scripts/perf.sh"]]
 
 [tool.tox.env.update-actions]
 description = "update GitHub Actions pins"

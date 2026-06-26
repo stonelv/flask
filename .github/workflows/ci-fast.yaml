@@ -1,0 +1,59 @@
+name: ci-fast
+# Fast feedback lane: lint, format check, and a smoke subset of tests on a
+# single interpreter, plus a changelog guard. Runs before the heavy matrix in
+# tests.yaml so trivial problems fail in seconds. See
+# docs/adr/0003-layered-ci-and-perf-gate.md.
+on:
+  pull_request:
+  push:
+    branches: [main, stable]
+permissions: {}
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  lint-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          enable-cache: true
+          prune-cache: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version-file: pyproject.toml
+      - name: ruff lint
+        run: uv run --locked --no-default-groups --group dev ruff check --no-fix --output-format=github
+      - name: ruff format check
+        run: uv run --locked --no-default-groups --group dev ruff format --check
+      - name: smoke tests
+        run: uv run --locked --no-default-groups --group tests pytest tests/test_basic.py -q
+  release-guard:
+    # Only meaningful on PRs, where a base commit exists to diff against.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: version bump requires a CHANGES.rst entry
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          old_ver="$(git show "${BASE_SHA}:pyproject.toml" | grep -m1 '^version = ' | cut -d'"' -f2)"
+          new_ver="$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)"
+          echo "base version: ${old_ver}"
+          echo "head version: ${new_ver}"
+          if [ "${old_ver}" = "${new_ver}" ]; then
+            echo "version unchanged; nothing to enforce."
+            exit 0
+          fi
+          if git diff --quiet "${BASE_SHA}" HEAD -- CHANGES.rst; then
+            echo "::error file=CHANGES.rst::version changed ${old_ver} -> ${new_ver} but CHANGES.rst was not updated"
+            exit 1
+          fi
+          echo "version changed and CHANGES.rst updated; ok."
