@@ -45,6 +45,7 @@ _MISSING_OTEL = (
 try:
     from opentelemetry import context as otel_context
     from opentelemetry import trace
+    from opentelemetry.instrumentation.wsgi import OpenTelemetryMiddleware
     from opentelemetry.metrics import get_meter
     from opentelemetry.trace import StatusCode
 
@@ -56,24 +57,25 @@ except ImportError:
 class FlaskOTel:
     """OpenTelemetry integration extension for Flask.
 
-    Automatically instruments a Flask application with:
+    Instruments a Flask application at two layers:
 
-    - **Tracing**: Creates a span for each request capturing method,
-      route, blueprint, endpoint, and status code.
-    - **Metrics**: Records ``http.server.request.duration`` histogram
-      and ``http.server.request.count`` counter, labeled by route,
-      method, and status code.
-    - **Logging**: Optionally injects trace and span IDs into Python
-      log records for correlation.
+    **WSGI layer** — ``OpenTelemetryMiddleware`` wraps ``app.wsgi_app``
+    to produce a transport-level *server span* with standard HTTP
+    semantic conventions (method, target, status, peer address).
 
-    :param app: The Flask application to instrument. If not provided,
-        call :meth:`init_app` later.
-    :param service_name: Override the service name reported to
-        OpenTelemetry. Defaults to ``app.name``.
-    :param excluded_urls: Comma-separated URL patterns to exclude
-        from tracing (e.g. ``"/health,/ready"``).
-    :param enable_logging: Whether to inject trace/span IDs into
-        log records. Defaults to ``True``.
+    **Flask layer** — ``before_request`` / ``after_request`` hooks
+    create a *child span* carrying Flask-specific attributes (route
+    pattern, endpoint, blueprint) plus request metrics.
+
+    :param app: The Flask application to instrument.
+    :param service_name: Override the service name reported to OTel.
+        Defaults to ``app.name``.
+    :param excluded_urls: Comma-separated URL path prefixes to skip
+        (e.g. ``"/health,/ready"``).  Both the WSGI middleware span
+        and the Flask-level span/metrics are suppressed for matching
+        requests.
+    :param enable_logging: Inject ``otel_trace_id`` / ``otel_span_id``
+        into Python log records.  Defaults to ``True``.
     """
 
     def __init__(
@@ -113,11 +115,7 @@ class FlaskOTel:
 
 
 class _OTelState:
-    """Per-app OpenTelemetry state stored in ``app.extensions['otel']``.
-
-    Keeps tracers, meters, and hook references scoped to a single
-    Flask application instance.
-    """
+    """Per-app OpenTelemetry state stored in ``app.extensions['otel']``."""
 
     def __init__(
         self,
@@ -128,6 +126,11 @@ class _OTelState:
         self.service_name = service_name
         self.excluded_urls = excluded_urls
         self.enable_logging = enable_logging
+
+        # Pre-parse excluded prefixes for fast matching.
+        self._excluded_prefixes: tuple[str, ...] = tuple(
+            p.strip() for p in (excluded_urls or "").split(",") if p.strip()
+        )
 
         self.tracer = trace.get_tracer(
             "flask.contrib.otel",
@@ -148,8 +151,31 @@ class _OTelState:
             description="HTTP request duration in milliseconds",
         )
 
+    # ------------------------------------------------------------------
+
     def setup(self, app: Flask) -> None:
-        """Wire up request hooks and optional logging."""
+        """Wire up WSGI middleware, request hooks, and logging."""
+        # WSGI-layer server span.
+        original_wsgi = app.wsgi_app
+        otel_mw = OpenTelemetryMiddleware(original_wsgi)
+
+        if self._excluded_prefixes:
+            prefixes = self._excluded_prefixes
+
+            def _filtering_wsgi(
+                environ: dict[str, t.Any],
+                start_response: t.Any,
+            ) -> t.Any:
+                path = environ.get("PATH_INFO", "")
+                if path.startswith(prefixes):
+                    return original_wsgi(environ, start_response)
+                return otel_mw(environ, start_response)
+
+            app.wsgi_app = _filtering_wsgi  # type: ignore[assignment]
+        else:
+            app.wsgi_app = otel_mw  # type: ignore[assignment]
+
+        # Flask-layer child span + metrics
         app.before_request(self._before_request)
         app.after_request(self._after_request)
         app.teardown_request(self._teardown_request)
@@ -161,11 +187,22 @@ class _OTelState:
     # Request lifecycle hooks
     # ------------------------------------------------------------------
 
+    def _is_excluded(self, path: str) -> bool:
+        return bool(
+            self._excluded_prefixes
+            and path.startswith(self._excluded_prefixes)
+        )
+
     def _before_request(self) -> None:
-        """Start a span and record request start time."""
+        """Start a Flask-level child span and record start time."""
         from flask import g
         from flask import request as req
 
+        if self._is_excluded(req.path):
+            g._otel_excluded = True
+            return
+
+        g._otel_excluded = False
         g._otel_start_time = time.perf_counter()
 
         route = req.url_rule.rule if req.url_rule else req.path
@@ -187,9 +224,12 @@ class _OTelState:
         g._otel_token = token
 
     def _after_request(self, response: Response) -> Response:
-        """Record metrics and finalise the span on success."""
+        """Finalise the span and record metrics."""
         from flask import g
         from flask import request as req
+
+        if getattr(g, "_otel_excluded", False):
+            return response
 
         span = getattr(g, "_otel_span", None)
         if span is not None and span.is_recording():
@@ -199,7 +239,7 @@ class _OTelState:
             else:
                 span.set_status(StatusCode.OK)
             span.end()
-            g._otel_span = None  # mark as consumed
+            g._otel_span = None
 
         token = getattr(g, "_otel_token", None)
         if token is not None:
@@ -222,8 +262,11 @@ class _OTelState:
         return response
 
     def _teardown_request(self, exc: BaseException | None) -> None:
-        """Ensure span is ended on error paths not reached by after_request."""
+        """End span on error paths not reached by ``_after_request``."""
         from flask import g
+
+        if getattr(g, "_otel_excluded", False):
+            return
 
         span = getattr(g, "_otel_span", None)
         if span is not None and span.is_recording():

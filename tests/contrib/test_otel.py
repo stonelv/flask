@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import typing as t
 
 import pytest
@@ -28,17 +29,18 @@ pytestmark = pytest.mark.skipif(
 if t.TYPE_CHECKING:
     from flask import Flask
 
-# Module-level singleton providers — OTel forbids resetting globals.
+# ------------------------------------------------------------------ #
+# Module-level providers (OTel forbids resetting globals)            #
+# ------------------------------------------------------------------ #
+
 _span_exporter: InMemorySpanExporter | None = None
 _metric_reader: InMemoryMetricReader | None = None
-_providers_initialised = False
+_providers_ready = False
 
 
 def _ensure_providers() -> tuple[InMemorySpanExporter, InMemoryMetricReader]:
-    """Lazily create OTel providers once per process."""
-    global _span_exporter, _metric_reader, _providers_initialised  # noqa: PLW0603
-
-    if not _providers_initialised:
+    global _span_exporter, _metric_reader, _providers_ready  # noqa: PLW0603
+    if not _providers_ready:
         _span_exporter = InMemorySpanExporter()
         tp = TracerProvider()
         tp.add_span_processor(SimpleSpanProcessor(_span_exporter))
@@ -47,8 +49,7 @@ def _ensure_providers() -> tuple[InMemorySpanExporter, InMemoryMetricReader]:
         _metric_reader = InMemoryMetricReader()
         mp = MeterProvider(metric_readers=[_metric_reader])
         set_meter_provider(mp)
-
-        _providers_initialised = True
+        _providers_ready = True
 
     assert _span_exporter is not None
     assert _metric_reader is not None
@@ -57,10 +58,8 @@ def _ensure_providers() -> tuple[InMemorySpanExporter, InMemoryMetricReader]:
 
 @pytest.fixture(autouse=True)
 def _clear_otel_data() -> None:
-    """Clear exported spans/metrics before each test."""
     se, mr = _ensure_providers()
     se.clear()
-    # Force-collect metrics so the reader is fresh
     mr.get_metrics_data()
 
 
@@ -69,41 +68,116 @@ def otel_env() -> tuple[InMemorySpanExporter, InMemoryMetricReader]:
     return _ensure_providers()
 
 
-@pytest.fixture
-def instrumented_app(otel_env: tuple) -> Flask:
-    """Flask app with OTel and a mix of normal / error routes."""
+# ------------------------------------------------------------------ #
+# Helper: build an instrumented app                                  #
+# ------------------------------------------------------------------ #
+
+
+def _make_app(
+    *,
+    excluded_urls: str | None = None,
+    enable_logging: bool = True,
+) -> Flask:
     import flask
     from flask.contrib.otel import FlaskOTel
 
     app = flask.Flask(__name__)
     app.config["TESTING"] = True
-    # Don't propagate exceptions — let error handlers run so OTel
-    # can observe the 500 response.
     app.config["PROPAGATE_EXCEPTIONS"] = False
-    FlaskOTel(app)
+    FlaskOTel(
+        app,
+        excluded_urls=excluded_urls,
+        enable_logging=enable_logging,
+    )
 
     @app.route("/")
     def index() -> str:
         return "ok"
 
     @app.route("/error")
-    def error() -> tuple[str, int]:
+    def error() -> t.NoReturn:
         raise ValueError("test error")
 
     @app.route("/hello/<name>")
     def hello(name: str) -> str:
         return f"hello {name}"
 
-    @app.errorhandler(500)
-    def handle_500(e: Exception) -> tuple[str, int]:
-        return "internal error", 500
+    @app.route("/health")
+    def health() -> str:
+        return "healthy"
+
+    @app.route("/log")
+    def log_it() -> str:
+        app.logger.info("traced log message")
+        return "logged"
 
     return app
 
 
-# ------------------------------------------------------------------
-# Initialization
-# ------------------------------------------------------------------
+@pytest.fixture
+def app(otel_env: tuple) -> Flask:
+    return _make_app()
+
+
+# ------------------------------------------------------------------ #
+# Helpers                                                            #
+# ------------------------------------------------------------------ #
+
+
+def _flask_spans(
+    exporter: InMemorySpanExporter,
+) -> list:
+    """Return only the Flask-level spans (have ``flask.endpoint``)."""
+    return [
+        s
+        for s in exporter.get_finished_spans()
+        if "flask.endpoint" in (s.attributes or {})
+    ]
+
+
+def _wsgi_spans(exporter: InMemorySpanExporter) -> list:
+    """Return WSGI-middleware spans (have ``http.method`` but no
+    ``flask.endpoint``)."""
+    return [
+        s
+        for s in exporter.get_finished_spans()
+        if "http.method" in (s.attributes or {})
+        and "flask.endpoint" not in (s.attributes or {})
+    ]
+
+
+def _metric_names(reader: InMemoryMetricReader) -> set[str]:
+    data = reader.get_metrics_data()
+    names: set[str] = set()
+    if data is None:
+        return names
+    for rm in data.resource_metrics:
+        for sm in rm.scope_metrics:
+            for m in sm.metrics:
+                names.add(m.name)
+    return names
+
+
+def _metric_points(
+    reader: InMemoryMetricReader, name: str
+) -> list[dict[str, t.Any]]:
+    """Return data-point attribute dicts for a given metric name."""
+    data = reader.get_metrics_data()
+    pts: list[dict[str, t.Any]] = []
+    if data is None:
+        return pts
+    for rm in data.resource_metrics:
+        for sm in rm.scope_metrics:
+            for m in sm.metrics:
+                if m.name == name:
+                    for dp in m.data.data_points:
+                        pts.append(dict(dp.attributes))
+    return pts
+
+
+# ================================================================== #
+# Init tests                                                         #
+# ================================================================== #
 
 
 class TestInit:
@@ -124,7 +198,7 @@ class TestInit:
         otel.init_app(app)
         assert "otel" in app.extensions
 
-    def test_missing_packages_error(
+    def test_missing_packages_raises(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         import flask
@@ -132,10 +206,9 @@ class TestInit:
         from flask.contrib.otel import FlaskOTel
 
         monkeypatch.setattr(mod, "_has_otel", False)
-        app = flask.Flask(__name__)
         otel = FlaskOTel()
         with pytest.raises(RuntimeError, match="pip install flask"):
-            otel.init_app(app)
+            otel.init_app(flask.Flask(__name__))
 
     def test_custom_service_name(self) -> None:
         import flask
@@ -150,166 +223,212 @@ class TestInit:
         from flask.contrib.otel import FlaskOTel
 
         otel = FlaskOTel()
-        a1 = flask.Flask("a1")
-        a2 = flask.Flask("a2")
+        a1, a2 = flask.Flask("a1"), flask.Flask("a2")
         otel.init_app(a1)
         otel.init_app(a2)
-        assert "otel" in a1.extensions
-        assert "otel" in a2.extensions
         assert a1.extensions["otel"] is not a2.extensions["otel"]
 
 
-# ------------------------------------------------------------------
-# Tracing
-# ------------------------------------------------------------------
+# ================================================================== #
+# Tracing tests                                                      #
+# ================================================================== #
 
 
 class TestTracing:
-    def test_request_creates_span(
-        self, instrumented_app: Flask, otel_env: tuple
+    def test_flask_span_created(
+        self, app: Flask, otel_env: tuple
     ) -> None:
-        span_exporter, _ = otel_env
-        client = instrumented_app.test_client()
-        client.get("/")
+        se, _ = otel_env
+        app.test_client().get("/")
+        assert len(_flask_spans(se)) == 1
 
-        spans = span_exporter.get_finished_spans()
-        flask_spans = [
-            s for s in spans if "http.route" in (s.attributes or {})
-        ]
-        assert len(flask_spans) == 1
-        attrs = dict(flask_spans[0].attributes or {})
-        assert attrs["http.method"] == "GET"
-        assert attrs["http.route"] == "/"
-
-    def test_span_has_route_and_endpoint(
-        self, instrumented_app: Flask, otel_env: tuple
+    def test_wsgi_span_created(
+        self, app: Flask, otel_env: tuple
     ) -> None:
-        span_exporter, _ = otel_env
-        client = instrumented_app.test_client()
-        client.get("/hello/world")
+        """WSGI middleware must produce a transport-level span."""
+        se, _ = otel_env
+        app.test_client().get("/")
+        assert len(_wsgi_spans(se)) >= 1
 
-        spans = span_exporter.get_finished_spans()
-        flask_spans = [
-            s for s in spans if "flask.endpoint" in (s.attributes or {})
-        ]
-        assert len(flask_spans) == 1
-        attrs = dict(flask_spans[0].attributes or {})
-        assert attrs["http.route"] == "/hello/<name>"
-        assert attrs["flask.endpoint"] == "hello"
-
-    def test_error_recorded_in_span(
-        self, instrumented_app: Flask, otel_env: tuple
+    def test_flask_span_attributes(
+        self, app: Flask, otel_env: tuple
     ) -> None:
-        span_exporter, _ = otel_env
-        client = instrumented_app.test_client()
-        resp = client.get("/error")
+        se, _ = otel_env
+        app.test_client().get("/hello/world")
+        fs = _flask_spans(se)
+        assert len(fs) == 1
+        a = dict(fs[0].attributes or {})
+        assert a["http.method"] == "GET"
+        assert a["http.route"] == "/hello/<name>"
+        assert a["flask.endpoint"] == "hello"
+        assert a["http.scheme"] == "http"
+
+    def test_error_span_status(
+        self, app: Flask, otel_env: tuple
+    ) -> None:
+        se, _ = otel_env
+        resp = app.test_client().get("/error")
         assert resp.status_code == 500
+        fs = _flask_spans(se)
+        assert len(fs) == 1
+        a = dict(fs[0].attributes or {})
+        assert a["http.status_code"] == 500
 
-        spans = span_exporter.get_finished_spans()
-        flask_spans = [
-            s for s in spans if "http.route" in (s.attributes or {})
-        ]
-        assert len(flask_spans) == 1
-        attrs = dict(flask_spans[0].attributes or {})
-        assert attrs["http.status_code"] == 500
-
-    def test_no_duplicate_spans(
-        self, instrumented_app: Flask, otel_env: tuple
+    def test_no_duplicate_flask_spans(
+        self, app: Flask, otel_env: tuple
     ) -> None:
-        """Each request should produce exactly one Flask-level span."""
-        span_exporter, _ = otel_env
-        client = instrumented_app.test_client()
-        client.get("/")
+        se, _ = otel_env
+        app.test_client().get("/")
+        assert len(_flask_spans(se)) == 1
 
-        spans = span_exporter.get_finished_spans()
-        flask_spans = [
-            s for s in spans if "flask.endpoint" in (s.attributes or {})
-        ]
-        assert len(flask_spans) == 1
-
-    def test_no_leaked_context(
-        self, instrumented_app: Flask, otel_env: tuple
+    def test_no_context_leak(
+        self, app: Flask, otel_env: tuple
     ) -> None:
-        """Span context must not leak between requests."""
-        span_exporter, _ = otel_env
-        client = instrumented_app.test_client()
-        client.get("/")
-        client.get("/hello/test")
-
-        spans = span_exporter.get_finished_spans()
-        flask_spans = [
-            s for s in spans if "flask.endpoint" in (s.attributes or {})
-        ]
-        assert len(flask_spans) == 2
-        ids = {s.context.span_id for s in flask_spans}
-        assert len(ids) == 2
+        se, _ = otel_env
+        c = app.test_client()
+        c.get("/")
+        c.get("/hello/x")
+        fs = _flask_spans(se)
+        assert len(fs) == 2
+        assert len({s.context.span_id for s in fs}) == 2
 
 
-# ------------------------------------------------------------------
-# Metrics
-# ------------------------------------------------------------------
+# ================================================================== #
+# excluded_urls tests                                                #
+# ================================================================== #
+
+
+class TestExcludedUrls:
+    def test_excluded_url_no_flask_span(
+        self, otel_env: tuple
+    ) -> None:
+        se, _ = otel_env
+        app = _make_app(excluded_urls="/health")
+        app.test_client().get("/health")
+        assert len(_flask_spans(se)) == 0
+
+    def test_excluded_url_no_metrics(
+        self, otel_env: tuple
+    ) -> None:
+        _, mr = otel_env
+        app = _make_app(excluded_urls="/health")
+        app.test_client().get("/health")
+        pts = _metric_points(mr, "http.server.request.count")
+        assert all(
+            p.get("http.route") != "/health" for p in pts
+        )
+
+    def test_non_excluded_url_still_traced(
+        self, otel_env: tuple
+    ) -> None:
+        se, _ = otel_env
+        app = _make_app(excluded_urls="/health")
+        app.test_client().get("/")
+        assert len(_flask_spans(se)) == 1
+
+    def test_multiple_excluded(
+        self, otel_env: tuple
+    ) -> None:
+        se, _ = otel_env
+        app = _make_app(excluded_urls="/health,/hello")
+        c = app.test_client()
+        c.get("/health")
+        c.get("/hello/x")
+        c.get("/")
+        assert len(_flask_spans(se)) == 1  # only "/"
+
+
+# ================================================================== #
+# Metrics tests                                                      #
+# ================================================================== #
 
 
 class TestMetrics:
-    def _metric_names(self, metric_reader: InMemoryMetricReader) -> set[str]:
-        metrics = metric_reader.get_metrics_data()
-        names: set[str] = set()
-        if metrics is None:
-            return names
-        for rm in metrics.resource_metrics:
-            for sm in rm.scope_metrics:
-                for m in sm.metrics:
-                    names.add(m.name)
-        return names
-
-    def test_request_counter(
-        self, instrumented_app: Flask, otel_env: tuple
+    def test_counter_recorded(
+        self, app: Flask, otel_env: tuple
     ) -> None:
-        _, metric_reader = otel_env
-        client = instrumented_app.test_client()
-        client.get("/")
-        client.get("/")
+        _, mr = otel_env
+        c = app.test_client()
+        c.get("/")
+        c.get("/")
+        assert "http.server.request.count" in _metric_names(mr)
 
-        assert "http.server.request.count" in self._metric_names(
-            metric_reader
-        )
-
-    def test_request_duration(
-        self, instrumented_app: Flask, otel_env: tuple
+    def test_duration_recorded(
+        self, app: Flask, otel_env: tuple
     ) -> None:
-        _, metric_reader = otel_env
-        client = instrumented_app.test_client()
-        client.get("/")
+        _, mr = otel_env
+        app.test_client().get("/")
+        assert "http.server.request.duration" in _metric_names(mr)
 
-        assert "http.server.request.duration" in self._metric_names(
-            metric_reader
-        )
-
-    def test_error_counted(
-        self, instrumented_app: Flask, otel_env: tuple
+    def test_error_route_counted_as_500(
+        self, app: Flask, otel_env: tuple
     ) -> None:
-        _, metric_reader = otel_env
-        client = instrumented_app.test_client()
-        resp = client.get("/error")
-        assert resp.status_code == 500
+        _, mr = otel_env
+        app.test_client().get("/error")
+        pts = _metric_points(mr, "http.server.request.count")
+        assert any(p.get("http.status_code") == 500 for p in pts)
 
-        metrics = metric_reader.get_metrics_data()
-        found_500 = False
-        if metrics is not None:
-            for rm in metrics.resource_metrics:
-                for sm in rm.scope_metrics:
-                    for m in sm.metrics:
-                        if m.name == "http.server.request.count":
-                            for dp in m.data.data_points:
-                                a = dict(dp.attributes)
-                                if a.get("http.status_code") == 500:
-                                    found_500 = True
-        assert found_500
+    def test_metric_labels(
+        self, app: Flask, otel_env: tuple
+    ) -> None:
+        _, mr = otel_env
+        app.test_client().get("/hello/world")
+        pts = _metric_points(mr, "http.server.request.count")
+        matching = [
+            p for p in pts if p.get("http.route") == "/hello/<name>"
+        ]
+        assert len(matching) == 1
+        assert matching[0]["http.method"] == "GET"
+        assert matching[0]["http.status_code"] == 200
 
 
-# ------------------------------------------------------------------
-# API preservation
-# ------------------------------------------------------------------
+# ================================================================== #
+# Logging integration tests                                          #
+# ================================================================== #
+
+
+class TestLogging:
+    def test_trace_id_injected(
+        self, otel_env: tuple
+    ) -> None:
+        app = _make_app(enable_logging=True)
+        records: list[logging.LogRecord] = []
+
+        class _Capture(logging.Handler):
+            def emit(self, record: logging.LogRecord) -> None:
+                records.append(record)
+
+        app.logger.addHandler(_Capture())
+        app.logger.setLevel(logging.DEBUG)
+        app.test_client().get("/log")
+
+        assert len(records) >= 1
+        rec = records[-1]
+        assert hasattr(rec, "otel_trace_id")
+        assert hasattr(rec, "otel_span_id")
+        assert rec.otel_trace_id != "0" * 32  # type: ignore[attr-defined]
+
+    def test_logging_disabled(
+        self, otel_env: tuple
+    ) -> None:
+        """When enable_logging=False the extension must not install its
+        own log filter on the app logger."""
+        import flask
+        from flask.contrib.otel import FlaskOTel
+
+        app = flask.Flask("logging_disabled_test")
+        app.config["TESTING"] = True
+        app.config["PROPAGATE_EXCEPTIONS"] = False
+        FlaskOTel(app, enable_logging=False)
+
+        # The _OTelLogFilter should NOT be among the filters
+        filter_classes = [type(f).__name__ for f in app.logger.filters]
+        assert "_OTelLogFilter" not in filter_classes
+
+
+# ================================================================== #
+# API preservation                                                   #
+# ================================================================== #
 
 
 class TestAPIPreservation:
@@ -319,14 +438,9 @@ class TestAPIPreservation:
         public = [n for n in dir(flask) if not n.startswith("_")]
         assert len(public) >= 39
 
-    def test_contrib_not_in_flask_all(self) -> None:
-        """contrib must not be in flask.__init__ explicit exports."""
+    def test_contrib_not_in_init_source(self) -> None:
         import flask
 
-        # flask.__init__.py uses 'from .x import y as y' re-exports.
-        # 'contrib' should not be among them.
-        init_src = flask.__file__
-        assert init_src is not None
-        with open(init_src) as f:
-            src = f.read()
-        assert "contrib" not in src
+        assert flask.__file__ is not None
+        with open(flask.__file__) as f:
+            assert "contrib" not in f.read()

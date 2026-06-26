@@ -59,13 +59,39 @@ Supports ``--dry-run`` for previewing.
     git reset --hard HEAD~1
     git push origin :refs/tags/X.Y.Z  # if already pushed
 
-If already published to PyPI, yank the release:
+If already published to PyPI, yank the version (do NOT delete it —
+yanking hides it from ``pip install`` but keeps existing pins working):
+
+.. code-block:: text
+
+    1. Go to https://pypi.org/manage/project/Flask/
+    2. Click the affected version → "Options" → "Yank"
+    3. Enter a reason (e.g. "critical regression in routing")
+
+Post-yank, publish a patch release with the fix rather than
+re-uploading to the same version number (PyPI version numbers are
+immutable).
+
+Post-release, bump to the next development version:
 
 .. code-block:: bash
 
-    pip install twine
-    twine upload --skip-existing dist/*  # re-upload is idempotent
-    # Or use PyPI web UI to yank
+    sed -i 's/^version = ".*"/version = "X.Y.(Z+1).dev"/' pyproject.toml
+    uv lock
+    git add -A && git commit -m "Start X.Y.(Z+1) development"
+    git push
+
+**CI publish pipeline guards (``publish.yaml``):**
+
+1. ``validate`` job — runs ``validate_release.py`` to verify tag
+   matches ``pyproject.toml`` version, no ``.dev`` suffix, changelog
+   entry exists, and no leftover changelog fragments.
+2. ``build`` job — builds wheel + sdist with reproducible
+   ``SOURCE_DATE_EPOCH``.
+3. ``create-release`` job — creates a draft GitHub Release with
+   changelog notes extracted from ``CHANGES.rst``.
+4. ``publish-pypi`` job — publishes via trusted OIDC (no API token
+   needed).
 
 Consequences
 ------------

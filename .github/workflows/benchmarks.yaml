@@ -9,6 +9,8 @@ permissions: {}
 concurrency:
   group: bench-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+env:
+  BENCHMARK_THRESHOLD: '15'
 jobs:
   benchmark:
     runs-on: ubuntu-latest
@@ -27,25 +29,31 @@ jobs:
         run: |
           uv run --locked --no-default-groups --group dev tox run -e bench -- \
             --benchmark-json=bench-results.json
-      - name: Restore baseline from main
+      # --- PR comparison ---
+      - name: Restore baseline
         if: github.event_name == 'pull_request'
         uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: baseline.json
-          key: benchmark-baseline-main
-          restore-keys: benchmark-baseline-main
+          # restore-keys does prefix matching: picks the most recent
+          # benchmark-baseline-main-* entry, so each main push can write
+          # a new unique key and the latest one is always found.
+          key: benchmark-baseline-main-impossible-exact-match
+          restore-keys: benchmark-baseline-main-
         id: baseline
       - name: Compare with baseline
         id: compare
         if: steps.baseline.outputs.cache-hit == 'true' && github.event_name == 'pull_request'
-        run: |
-          python3 scripts/ci/compare_benchmarks.py bench-results.json baseline.json --threshold=15
-          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+        run: >
+          python3 scripts/ci/compare_benchmarks.py
+          bench-results.json baseline.json
+          --threshold="${BENCHMARK_THRESHOLD}"
       - name: Block on regression
         if: steps.compare.outcome == 'failure'
         run: |
-          echo "::error::Performance regression exceeds 15% threshold — see comparison above."
+          echo "::error::Performance regression exceeds ${BENCHMARK_THRESHOLD}% threshold."
           exit 1
+      # --- Baseline update on main ---
       - name: Save baseline
         if: github.ref == 'refs/heads/main'
         run: cp bench-results.json baseline.json
@@ -54,8 +62,11 @@ jobs:
         uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: baseline.json
-          key: benchmark-baseline-main
+          # Unique per-commit key so each push overwrites the "latest"
+          # via the restore-keys prefix mechanism above.
+          key: benchmark-baseline-main-${{ github.sha }}
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        if: always()
         with:
           name: benchmark-results
           path: bench-results.json

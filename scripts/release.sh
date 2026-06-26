@@ -35,9 +35,10 @@ if [ -z "$VERSION" ]; then
 fi
 
 # Validate semantic version format
-if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(\.?(a|b|rc|dev|post)[0-9]*)?$'; then
-    echo "Error: '$VERSION' is not a valid version format"
-    echo "Expected: X.Y.Z or X.Y.Z.devN / X.Y.ZaN / X.Y.ZbN / X.Y.ZrcN"
+if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(\.?(a|b|rc|post)[0-9]*)?$'; then
+    echo "Error: '$VERSION' is not a valid release version"
+    echo "Expected: X.Y.Z or X.Y.ZaN / X.Y.ZbN / X.Y.ZrcN"
+    echo "(dev versions are not releasable)"
     exit 1
 fi
 
@@ -52,9 +53,11 @@ fi
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 if [ "$BRANCH" != "main" ] && [ "$BRANCH" != "stable" ]; then
     echo "Warning: releasing from branch '$BRANCH' (expected main or stable)"
-    read -r -p "Continue? [y/N] " confirm
-    if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
-        exit 1
+    if [ "$DRY_RUN" = false ]; then
+        read -r -p "Continue? [y/N] " confirm
+        if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+            exit 1
+        fi
     fi
 fi
 
@@ -63,32 +66,67 @@ echo "    Branch: $BRANCH"
 echo "    Dry run: $DRY_RUN"
 echo ""
 
-# Step 1: Generate changelog
-echo "==> Step 1: Generating changelog..."
-if [ "$DRY_RUN" = true ]; then
-    uv run towncrier build --draft --version "$VERSION" 2>/dev/null || echo "  (no fragments found)"
+# Step 1: Check for changelog fragments
+FRAGMENT_COUNT=$(find changelog.d -name '*.rst' ! -name '_template.rst' 2>/dev/null | wc -l)
+if [ "$FRAGMENT_COUNT" -eq 0 ]; then
+    echo "Warning: no changelog fragments found in changelog.d/"
+    echo "         The release will have an empty changelog section."
+    if [ "$DRY_RUN" = false ]; then
+        read -r -p "Continue anyway? [y/N] " confirm
+        if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+            exit 1
+        fi
+    fi
 else
-    uv run towncrier build --yes --version "$VERSION" 2>/dev/null || echo "  (no fragments to process)"
+    echo "  Found $FRAGMENT_COUNT changelog fragment(s)"
 fi
 
-# Step 2: Update version in pyproject.toml
-echo "==> Step 2: Updating version to $VERSION..."
+# Step 2: Generate changelog
+echo "==> Step 1/6: Generating changelog..."
+if [ "$DRY_RUN" = true ]; then
+    uv run towncrier build --draft --version "$VERSION" || true
+else
+    uv run towncrier build --yes --version "$VERSION" || true
+fi
+
+# Step 3: Update version in pyproject.toml
+echo "==> Step 2/6: Updating version to $VERSION..."
 if [ "$DRY_RUN" = true ]; then
     echo "  Would update pyproject.toml: version = \"$VERSION\""
 else
     sed -i "s/^version = \".*\"/version = \"$VERSION\"/" pyproject.toml
 fi
 
-# Step 3: Update lock file
-echo "==> Step 3: Updating lock file..."
+# Step 4: Update lock file
+echo "==> Step 3/6: Updating lock file..."
 if [ "$DRY_RUN" = true ]; then
     echo "  Would run: uv lock"
 else
     uv lock 2>/dev/null || true
 fi
 
-# Step 4: Commit
-echo "==> Step 4: Committing release..."
+# Step 5: Build and verify artifacts
+echo "==> Step 4/6: Building distribution..."
+if [ "$DRY_RUN" = true ]; then
+    echo "  Would run: uv build"
+    echo "  Would verify: wheel and sdist exist in dist/"
+else
+    uv build
+    # Verify both artifacts exist
+    WHEEL_COUNT=$(find dist -name '*.whl' 2>/dev/null | wc -l)
+    SDIST_COUNT=$(find dist -name '*.tar.gz' 2>/dev/null | wc -l)
+    if [ "$WHEEL_COUNT" -eq 0 ] || [ "$SDIST_COUNT" -eq 0 ]; then
+        echo "Error: build failed — missing wheel or sdist in dist/"
+        exit 1
+    fi
+    echo "  ✓ wheel: $(ls dist/*.whl)"
+    echo "  ✓ sdist: $(ls dist/*.tar.gz)"
+    # Clean up — CI will rebuild from the tagged commit
+    rm -rf dist/
+fi
+
+# Step 6: Commit
+echo "==> Step 5/6: Committing release..."
 if [ "$DRY_RUN" = true ]; then
     echo "  Would commit: 'Release $VERSION'"
 else
@@ -96,8 +134,8 @@ else
     git commit -m "Release $VERSION"
 fi
 
-# Step 5: Tag
-echo "==> Step 5: Creating tag..."
+# Step 7: Tag
+echo "==> Step 6/6: Creating tag..."
 if [ "$DRY_RUN" = true ]; then
     echo "  Would create tag: $VERSION"
 else
@@ -114,8 +152,16 @@ else
     echo "  1. Review the commit:  git log -1 --stat"
     echo "  2. Push to trigger CI: git push origin $BRANCH --follow-tags"
     echo ""
-    echo "Rollback (if needed):"
-    echo "  git tag -d $VERSION"
-    echo "  git reset --hard HEAD~1"
-    echo "  git push origin :refs/tags/$VERSION  # if already pushed"
+    echo "Rollback (before push):"
+    echo "  git tag -d $VERSION && git reset --hard HEAD~1"
+    echo ""
+    echo "Rollback (after push):"
+    echo "  git push origin :refs/tags/$VERSION"
+    echo "  git revert HEAD && git push"
+    echo "  # If published to PyPI: yank via https://pypi.org/manage/project/Flask/"
+    echo ""
+    echo "Post-release: bump to next dev version:"
+    NEXT_DEV="${VERSION}.dev"
+    echo "  sed -i 's/^version = \".*\"/version = \"$NEXT_DEV\"/' pyproject.toml"
+    echo "  uv lock && git add -A && git commit -m 'Start ${VERSION}+1 development'"
 fi

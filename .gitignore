@@ -6,3 +6,7 @@ dist/
 htmlcov/
 .tox/
 docs/_build/
+results.xml
+results.json
+bench-results.json
+baseline.json
