@@ -31,6 +31,29 @@ jobs:
         run: uv run --locked --no-default-groups --group dev ruff format --check
       - name: smoke tests
         run: uv run --locked --no-default-groups --group tests pytest tests/test_basic.py -q
+  observability-example:
+    # Proves the opt-in OpenTelemetry example actually emits spans/metrics,
+    # in an isolated env so OTel never enters the core lock (ADR 0004).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          enable-cache: true
+          prune-cache: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version-file: pyproject.toml
+      - name: run example telemetry test (in-memory exporters)
+        run: |
+          uv venv /tmp/otelenv
+          uv pip install --python /tmp/otelenv -e . pytest \
+            "opentelemetry-sdk>=1.27" \
+            "opentelemetry-instrumentation-flask>=0.48b0" \
+            "opentelemetry-instrumentation-logging>=0.48b0"
+          /tmp/otelenv/bin/python -m pytest examples/observability/test_otel.py -q
   release-guard:
     # Only meaningful on PRs, where a base commit exists to diff against.
     if: github.event_name == 'pull_request'

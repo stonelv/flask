@@ -13,8 +13,10 @@ Signals produced:
 * **Logs** — standard ``logging`` records are stamped with the active
   ``trace_id``/``span_id`` so logs correlate with traces in your backend.
 
-All exporters default to the OTLP endpoint from the standard environment
-variable ``OTEL_EXPORTER_OTLP_ENDPOINT`` (e.g. ``http://localhost:4317``).
+By default everything exports over OTLP to the endpoint from the standard
+environment variable ``OTEL_EXPORTER_OTLP_ENDPOINT`` (e.g.
+``http://localhost:4317``). For tests, inject in-memory exporters via the
+keyword arguments — see ``test_otel.py``.
 """
 
 from __future__ import annotations
@@ -24,45 +26,77 @@ import typing as t
 
 from opentelemetry import metrics
 from opentelemetry import trace
-from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
-from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.flask import FlaskInstrumentor
 from opentelemetry.instrumentation.logging import LoggingInstrumentor
 from opentelemetry.sdk._logs import LoggerProvider
 from opentelemetry.sdk._logs import LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.sdk._logs.export import LogExporter
 from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import MetricReader
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.resources import SERVICE_NAME
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.trace.export import SpanExporter
 
 if t.TYPE_CHECKING:
     from flask import Flask
 
 
-def configure_telemetry(app: Flask, service_name: str = "flask-app") -> None:
+class Telemetry(t.NamedTuple):
+    """Handles returned by :func:`configure_telemetry`, useful in tests."""
+
+    tracer_provider: TracerProvider
+    meter_provider: MeterProvider
+    logger_provider: LoggerProvider
+
+
+def configure_telemetry(
+    app: Flask,
+    service_name: str = "flask-app",
+    *,
+    span_exporter: SpanExporter | None = None,
+    metric_reader: MetricReader | None = None,
+    log_exporter: LogExporter | None = None,
+) -> Telemetry:
     """Wire traces, metrics, and correlated logs into ``app``.
 
-    Idempotent per process: call once during application setup.
+    Call once during application setup. The exporter/reader arguments default to
+    OTLP; pass in-memory implementations to make the wiring testable without a
+    collector. Returns the providers so callers can ``force_flush()`` them.
     """
     resource = Resource.create({SERVICE_NAME: service_name})
 
     # --- Traces -------------------------------------------------------------
+    if span_exporter is None:
+        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
+            OTLPSpanExporter,
+        )
+
+        span_exporter = OTLPSpanExporter()
     tracer_provider = TracerProvider(resource=resource)
-    tracer_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+    tracer_provider.add_span_processor(BatchSpanProcessor(span_exporter))
     trace.set_tracer_provider(tracer_provider)
 
     # --- Metrics ------------------------------------------------------------
-    metric_reader = PeriodicExportingMetricReader(OTLPMetricExporter())
+    if metric_reader is None:
+        from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import (
+            OTLPMetricExporter,
+        )
+
+        metric_reader = PeriodicExportingMetricReader(OTLPMetricExporter())
     meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
     metrics.set_meter_provider(meter_provider)
 
     # --- Logs (correlated with the active span) -----------------------------
+    if log_exporter is None:
+        from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
+
+        log_exporter = OTLPLogExporter()
     logger_provider = LoggerProvider(resource=resource)
-    logger_provider.add_log_record_processor(BatchLogRecordProcessor(OTLPLogExporter()))
+    logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
     handler = LoggingHandler(level=logging.INFO, logger_provider=logger_provider)
     logging.getLogger().addHandler(handler)
     # injects trace_id/span_id into LogRecords so console logs correlate too
@@ -76,3 +110,5 @@ def configure_telemetry(app: Flask, service_name: str = "flask-app") -> None:
         tracer_provider=tracer_provider,
         meter_provider=meter_provider,
     )
+
+    return Telemetry(tracer_provider, meter_provider, logger_provider)

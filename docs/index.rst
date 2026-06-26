@@ -86,5 +86,6 @@ Additional Notes
    extensiondev
    contributing
    release-process
+   engineering-governance
    license
    changes

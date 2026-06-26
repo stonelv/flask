@@ -25,3 +25,9 @@ build-backend = "flit_core.buildapi"
 
 [tool.flit.module]
 name = "otel_setup"
+
+# Self-contained pytest config so this example does not inherit the strict
+# filterwarnings from the repo-root pyproject (OTel emits provider-override
+# warnings that are expected here).
+[tool.pytest.ini_options]
+testpaths = ["."]

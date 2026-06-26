@@ -28,6 +28,10 @@ Unreleased
     it's disabled in config. Previously, only disabling worked. :issue:`5916`
 -   ``Flask.select_jinja_autoescape`` uses case-insensitive comparison instead
     of only lower case file extensions. :pr:`6012`
+-   Fix an import-time crash in ``flask.cli``: ``CertParamType`` no longer
+    subscripts ``click.ParamType`` with a runtime ``ssl`` reference, so ``import
+    flask`` works without forcing ``ssl`` to be available. Behaviour is
+    unchanged.
 
 
 Version 3.1.3

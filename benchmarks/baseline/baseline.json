@@ -1,0 +1,106 @@
+{
+  "benchmarks": [
+    {
+      "fullname": "benchmarks/test_appctx_bench.py::test_app_context_push_pop",
+      "stats": {
+        "max": 1.5457997506018728e-05,
+        "mean": 1.4101611652667867e-06,
+        "median": 1.3749959180131555e-06,
+        "min": 1.1659940355457366e-06,
+        "ops": 709138.8024508611,
+        "rounds": 23415,
+        "stddev": 4.5142269619845033e-07
+      }
+    },
+    {
+      "fullname": "benchmarks/test_appctx_bench.py::test_request_context_push_pop",
+      "stats": {
+        "max": 0.004516083005000837,
+        "mean": 4.512190137018533e-05,
+        "median": 3.583399666240439e-05,
+        "min": 3.325000579934567e-05,
+        "ops": 22162.186646255963,
+        "rounds": 670,
+        "stddev": 0.0001734421781334555
+      }
+    },
+    {
+      "fullname": "benchmarks/test_json_bench.py::test_json_response",
+      "stats": {
+        "max": 0.00026287500077160075,
+        "mean": 8.122314663996896e-05,
+        "median": 7.395899592665955e-05,
+        "min": 6.37500052107498e-05,
+        "ops": 12311.76138044265,
+        "rounds": 4726,
+        "stddev": 2.069179616819278e-05
+      }
+    },
+    {
+      "fullname": "benchmarks/test_json_bench.py::test_json_dumps_loads",
+      "stats": {
+        "max": 0.004112167000130285,
+        "mean": 8.044314197008625e-06,
+        "median": 7.2920011007227e-06,
+        "min": 6.4589985413476825e-06,
+        "ops": 124311.40498861445,
+        "rounds": 53692,
+        "stddev": 1.8233266580341995e-05
+      }
+    },
+    {
+      "fullname": "benchmarks/test_json_bench.py::test_url_for",
+      "stats": {
+        "max": 0.00021374999778345227,
+        "mean": 4.1221208519972174e-05,
+        "median": 3.875000402331352e-05,
+        "min": 3.6124998587183654e-05,
+        "ops": 24259.356673531,
+        "rounds": 6100,
+        "stddev": 8.466573792763374e-06
+      }
+    },
+    {
+      "fullname": "benchmarks/test_routing_bench.py::test_dispatch_static_route",
+      "stats": {
+        "max": 0.00017387499974574894,
+        "mean": 7.080690469486446e-05,
+        "median": 6.80840021232143e-05,
+        "min": 5.987499753246084e-05,
+        "ops": 14122.916462870448,
+        "rounds": 4378,
+        "stddev": 1.0326171216905472e-05
+      }
+    },
+    {
+      "fullname": "benchmarks/test_routing_bench.py::test_dispatch_dynamic_route",
+      "stats": {
+        "max": 0.0002924170039477758,
+        "mean": 8.627369789250375e-05,
+        "median": 7.583300612168387e-05,
+        "min": 6.454200047301129e-05,
+        "ops": 11591.018171563608,
+        "rounds": 6433,
+        "stddev": 2.3406913925496066e-05
+      }
+    },
+    {
+      "fullname": "benchmarks/test_routing_bench.py::test_url_map_match",
+      "stats": {
+        "max": 0.00010845799988601357,
+        "mean": 2.8204529193061757e-06,
+        "median": 2.458000381011516e-06,
+        "min": 2.0830048015341163e-06,
+        "ops": 354552.98443556274,
+        "rounds": 60607,
+        "stddev": 2.5441812321863924e-06
+      }
+    }
+  ],
+  "machine_info": {
+    "machine": "aarch64",
+    "node": "20110558af46",
+    "python_version": "3.11.2",
+    "system": "Linux"
+  }
+}
