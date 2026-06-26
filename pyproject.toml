@@ -93,6 +93,8 @@ include = [
     "docs/",
     "examples/",
     "tests/",
+    "benchmarks/",
+    "scripts/",
     "CHANGES.rst",
     "uv.lock"
 ]
@@ -107,6 +109,10 @@ default-groups = ["dev", "pre-commit", "tests", "typing"]
 testpaths = ["tests"]
 filterwarnings = [
     "error",
+]
+markers = [
+    "smoke: fast subset run as the CI smoke gate (auto-assigned by tests/conftest.py)",
+    "slow: long-running tests excluded from the smoke gate",
 ]
 
 [tool.coverage.run]
@@ -145,7 +151,7 @@ include = ["src", "tests/type_check"]
 typeCheckingMode = "basic"
 
 [tool.ruff]
-src = ["src"]
+src = ["src", "benchmarks", "scripts"]
 fix = true
 show-fixes = true
 output-format = "full"
@@ -191,6 +197,17 @@ commands = [[
     "pytest", "-v", "--tb=short", "--basetemp={env_tmp_dir}",
     {replace = "posargs", default = [], extend = true},
 ]]
+
+[tool.tox.env.smoke]
+description = "fast smoke subset gate; auto-selects tests marked `smoke`"
+commands = [[
+    "pytest", "-m", "smoke", "-v", "--tb=short", "--basetemp={env_tmp_dir}",
+    {replace = "posargs", default = [], extend = true},
+]]
+
+[tool.tox.env.perf]
+description = "in-process performance micro-benchmarks compared to committed baseline"
+commands = [["python", "benchmarks/perf_check.py"]]
 
 [tool.tox.env.tests-min]
 description = "pytest on minimum dependency versions"

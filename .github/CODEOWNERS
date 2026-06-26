@@ -1,0 +1,13 @@
+# Reviewer auto-assignment + test-failure attribution (scripts/triage.py).
+# Replace the placeholder handles with real team/user logins before enabling.
+# Longest-matching-pattern wins (standard CODEOWNERS semantics).
+
+*               @pallets/flask-maintainers
+
+/src/flask/     @pallets/flask
+/tests/         @pallets/flask
+/benchmarks/    @pallets/flask
+/scripts/       @pallets/flask-maintainers
+/.github/       @pallets/flask-maintainers
+/docs/          @pallets/docs
+/docs/adr/      @pallets/flask-maintainers

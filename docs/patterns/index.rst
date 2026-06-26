@@ -36,5 +36,6 @@ collected in the following pages.
    methodoverrides
    requestchecksum
    celery
+   observability
    subclassing
    singlepageapplications

@@ -7,6 +7,43 @@ from _pytest import monkeypatch
 from flask import Flask
 from flask.globals import app_ctx as _app_ctx
 
+# Curated allowlist of high-signal, fast test modules that form the CI smoke
+# gate. ``pytest_collection_modifyitems`` only *adds* the ``smoke`` marker to
+# these; a normal run (no ``-m``) selects the whole suite unchanged. The list
+# is intentionally small and tunable.
+SMOKE_MODULES = frozenset({
+    "test_basic",
+    "test_signals",
+    "test_config",
+    "test_json",
+    "test_json_tag",
+    "test_helpers",
+    "test_request",
+    "test_instance_config",
+    "test_session_interface",
+    "test_converters",
+    "test_subclassing",
+    "test_regression",
+})
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Auto-tag the curated smoke modules.
+
+    Markers are registered in ``pyproject.toml`` (so they never trigger the
+    ``PytestUnknownMarkWarning`` that ``filterwarnings = ["error"]`` would turn
+    into a hard failure). Selection via ``-m smoke`` is opt-in; without it the
+    full suite runs as before.
+    """
+    for item in items:
+        module = getattr(item, "module", None)
+        if module is None:
+            continue
+        stem = module.__name__.rsplit(".", 1)[-1]
+        if stem in SMOKE_MODULES:
+            item.add_marker(pytest.mark.smoke)
+
+
 
 @pytest.fixture(scope="session", autouse=True)
 def _standard_os_environ():

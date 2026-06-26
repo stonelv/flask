@@ -83,6 +83,8 @@ Additional Notes
    :maxdepth: 2
 
    design
+   adr/index
+   engineering
    extensiondev
    contributing
    license

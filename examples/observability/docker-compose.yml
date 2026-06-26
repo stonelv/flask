@@ -1,0 +1,58 @@
+# End-to-end OpenTelemetry stack for the observability example.
+#
+#   docker compose up
+#
+# Then run the app with OTLP export enabled:
+#
+#   OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 flask --app observability_example run
+#
+# Traces:  http://localhost:16686  (Jaeger)
+# Metrics: http://localhost:9090   (Prometheus)
+# Dashboards: http://localhost:3000  (Grafana, admin/admin)
+
+services:
+  app:
+    build: .
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://collector:4318
+      OTEL_SERVICE_NAME: flask-observability-example
+    ports:
+      - "5000:5000"
+    depends_on:
+      - collector
+
+  collector:
+    image: otel/opentelemetry-collector-contrib:0.110.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "4318:4318"   # OTLP/HTTP (app exports here)
+      - "8888:8888"   # collector metrics + Prometheus scrape target
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.60
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686" # Jaeger UI
+      - "4317:4317"   # OTLP/gRPC (collector -> jaeger)
+
+  prometheus:
+    image: prom/prometheus:v3.0.0
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+      - jaeger

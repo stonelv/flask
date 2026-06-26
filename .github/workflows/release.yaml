@@ -1,0 +1,79 @@
+name: Release
+# Semver release pipeline. Manual dispatch only (never auto-fires on push).
+# Defaults to dry_run=true so a first run only prints the proposal. A real
+# release (dry_run=false) commits the version bump + CHANGELOG.md mirror,
+# tags vX.Y.Z, and pushes -- the tag triggers .github/workflows/publish.yaml,
+# whose `environment: publish` approval is the hard gate before PyPI.
+# See docs/adr/0004-semver-release-pipeline.rst.
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Semver bump level (auto classifies from conventional commits)"
+        type: choice
+        options: [auto, major, minor, patch]
+        default: auto
+      dry_run:
+        description: "Dry run (compute + print, no commit/tag/push)"
+        type: boolean
+        default: true
+permissions:
+  contents: write
+concurrency:
+  group: release
+  cancel-in-progress: false
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+      dry_run: ${{ inputs.dry_run }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # persist-credentials is required here: this workflow commits the
+          # version bump and pushes the tag. (All other workflows keep it
+          # false.) Branch protection must allow the bot, or use a PAT.
+          persist-credentials: true
+          fetch-depth: 0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version-file: pyproject.toml
+      - id: bump
+        name: compute and (optionally) apply version bump
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            python scripts/changes.py bump --level "${{ inputs.bump }}" --dry-run --github-output
+          else
+            python scripts/changes.py bump --level "${{ inputs.bump }}" --apply --github-output
+          fi
+      - name: commit, tag, push (skipped on dry-run)
+        if: ${{ inputs.dry_run != true }}
+        run: |
+          git config user.name "pallets-bot"
+          git config user.email "contact@palletsprojects.com"
+          git commit -am "Release $NEW_VERSION"
+          git tag "v$NEW_VERSION"
+          git push origin "HEAD:main" "v$NEW_VERSION"
+  # Attach auto-generated release notes to the GitHub release that
+  # publish.yaml creates from the tag. Non-blocking; cannot break the build
+  # or the PyPI publish.
+  attach-notes:
+    needs: [prepare]
+    if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version-file: pyproject.toml
+      - run: python scripts/release_notes.py --version "${{ needs.prepare.outputs.version }}" > notes.md
+      - name: attach release notes
+        run: gh release edit "v${{ needs.prepare.outputs.version }}" --repo "$GITHUB_REPOSITORY" --notes-file notes.md
+        env:
+          GH_TOKEN: ${{ github.token }}

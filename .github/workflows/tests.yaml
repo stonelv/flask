@@ -10,7 +10,26 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
+  # Fast smoke gate. If this fails, the heavy matrix / typing / perf jobs are
+  # skipped (they all `need: smoke`) so a broken PR does not burn matrix
+  # minutes. Selects the curated `smoke`-marked subset registered in
+  # tests/conftest.py.
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          enable-cache: true
+          prune-cache: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version-file: pyproject.toml
+      - run: uv run --locked --no-default-groups --group dev tox run -e smoke
   tests:
+    needs: [smoke]
     name: ${{ matrix.name || matrix.python }}
     runs-on: ${{ matrix.os || 'ubuntu-latest' }}
     strategy:
@@ -39,10 +58,23 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python }}
+      - run: mkdir -p test-results
+      # JUnit output is injected via PYTEST_ADDOPTS (not posargs) so it never
+      # leaks into the style/typing/docs envs that don't run pytest. The slug
+      # is unique per matrix job (OS disambiguates py3.14 on ubuntu/win/mac).
       - run: uv run --locked --no-default-groups --group dev tox run
         env:
           TOX_ENV: ${{ matrix.tox || format('py{0}', matrix.python) }}
+          PYTEST_ADDOPTS: >-
+            --junit-xml=test-results/junit-${{ matrix.tox || format('py{0}', matrix.python) }}-${{ matrix.os || 'linux' }}.xml
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        if: always()
+        with:
+          name: junit-${{ matrix.tox || format('py{0}', matrix.python) }}-${{ matrix.os || 'linux' }}
+          path: test-results
+          if-no-files-found: ignore
   typing:
+    needs: [smoke]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -61,3 +93,46 @@ jobs:
           path: ./.mypy_cache
           key: mypy|${{ hashFiles('pyproject.toml') }}
       - run: uv run --locked --no-default-groups --group dev tox run -e typing
+  # Performance regression gate (advisory in Phase 1/2). Posts the comparison
+  # table to the run summary; exit 0 so runner jitter never blocks a PR.
+  # Promoted to a hard gate in a later phase (see docs/adr/0002).
+  perf:
+    needs: [smoke]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          enable-cache: true
+          prune-cache: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version-file: pyproject.toml
+      - name: perf regression (advisory)
+        run: uv run --locked --no-default-groups --group dev tox run -e perf >> "$GITHUB_STEP_SUMMARY"
+  # Failed-test auto-attribution. Runs whether tests passed or failed
+  # (if: always()), but only does work when tests failed. fetch-depth: 0 is
+  # required for the git-blame fallback in scripts/triage.py.
+  triage:
+    needs: [tests]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version-file: pyproject.toml
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        if: ${{ needs.tests.result == 'failure' }}
+        with:
+          pattern: junit-*
+          path: test-results
+          merge-multiple: true
+      - name: attribute failures to owners
+        if: ${{ needs.tests.result == 'failure' }}
+        run: python scripts/triage.py --junit test-results >> "$GITHUB_STEP_SUMMARY"
