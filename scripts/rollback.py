@@ -14,6 +14,8 @@ Example:
     python scripts/rollback.py 3.1.0
 """
 
+import argparse
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -40,9 +42,15 @@ def run_command(cmd: list[str], check: bool = True) -> subprocess.CompletedProce
     return result
 
 
-def delete_git_tag(version: str, push: bool = True) -> None:
+def delete_git_tag(version: str, push: bool = True, dry_run: bool = False) -> None:
     """Delete a git tag locally and remotely."""
     tag_name = f"v{version}" if not version.startswith("v") else version
+
+    if dry_run:
+        print(f"[dry-run] Would delete local tag: {tag_name}")
+        if push:
+            print(f"[dry-run] Would delete remote tag: {tag_name}")
+        return
 
     # Delete local tag
     result = run_command(["git", "tag", "-d", tag_name], check=False)
@@ -63,7 +71,7 @@ def delete_git_tag(version: str, push: bool = True) -> None:
             print(f"⚠ Could not delete remote tag {tag_name} (may not exist)")
 
 
-def revert_version_commit(version: str) -> None:
+def revert_version_commit(version: str, dry_run: bool = False) -> None:
     """Find and revert the version bump commit."""
     # Find commit that bumped to this version
     result = run_command(
@@ -91,6 +99,10 @@ def revert_version_commit(version: str) -> None:
 
     # Show the commit
     run_command(["git", "show", target_commit, "--stat"])
+
+    if dry_run:
+        print(f"[dry-run] Would revert commit {target_commit}")
+        return
 
     response = input(f"\nRevert commit {target_commit}? This will create a revert commit. [y/N] ")
     if response.lower() != "y":
@@ -144,13 +156,27 @@ def provide_pypi_instructions(version: str) -> None:
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: rollback.py <version>")
-        print("Example: rollback.py 3.1.0")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        description="Rollback a Flask release.",
+        epilog="""Examples:
+  rollback.py 3.1.0              # rollback version 3.1.0
+  rollback.py 3.1.0 --dry-run    # preview without making changes""",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "version",
+        help="Version to rollback (e.g., 3.1.0 or v3.1.0)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be done without making changes",
+    )
 
-    version = sys.argv[1].lstrip("v")
-    print(f"Rolling back version: {version}\n")
+    args = parser.parse_args()
+
+    version = args.version.lstrip("v")
+    print(f"Rolling back version: {version}" + (" (dry-run)" if args.dry_run else "") + "\n")
 
     # Confirm
     print("This will:")
@@ -159,23 +185,24 @@ def main():
     print(f"  3. Provide instructions for yanking PyPI release")
     print()
 
-    response = input("Continue? [y/N] ")
-    if response.lower() != "y":
-        print("Aborted")
-        sys.exit(0)
+    if not args.dry_run:
+        response = input("Continue? [y/N] ")
+        if response.lower() != "y":
+            print("Aborted")
+            sys.exit(0)
 
     print()
 
     # Step 1: Delete git tag
     print("Step 1: Deleting git tag")
     print("-" * 60)
-    delete_git_tag(version, push=True)
+    delete_git_tag(version, push=True, dry_run=args.dry_run)
     print()
 
     # Step 2: Optionally revert version commit
     print("Step 2: Revert version bump commit (optional)")
     print("-" * 60)
-    revert_version_commit(version)
+    revert_version_commit(version, dry_run=args.dry_run)
     print()
 
     # Step 3: PyPI instructions
@@ -183,12 +210,15 @@ def main():
     print("-" * 60)
     provide_pypi_instructions(version)
 
-    print("\n✅ Rollback process initiated")
-    print("\nRemaining manual steps:")
-    print("  1. Complete PyPI yanking (instructions above)")
-    print("  2. Notify users if this was a public release")
-    print("  3. Update CHANGES.rst to remove the release entry")
-    print("  4. Create a new patch release if needed")
+    if not args.dry_run:
+        print("\n✅ Rollback process initiated")
+        print("\nRemaining manual steps:")
+        print("  1. Complete PyPI yanking (instructions above)")
+        print("  2. Notify users if this was a public release")
+        print("  3. Update CHANGES.rst to remove the release entry")
+        print("  4. Create a new patch release if needed")
+    else:
+        print("\n[dry-run] No changes were made")
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@ Usage:
     python scripts/bump_version.py 3.1.0  # specific version
 """
 
+import argparse
 import re
 import sys
 from pathlib import Path
@@ -66,7 +67,7 @@ def get_current_version() -> str:
     return match.group(1)
 
 
-def update_pyproject_toml(new_version: str) -> None:
+def update_pyproject_toml(new_version: str, dry_run: bool = False) -> None:
     """Update version in pyproject.toml."""
     pyproject_path = ROOT / "pyproject.toml"
     content = pyproject_path.read_text()
@@ -76,25 +77,37 @@ def update_pyproject_toml(new_version: str) -> None:
         content,
         flags=re.MULTILINE,
     )
-    pyproject_path.write_text(content)
-    print(f"✓ Updated pyproject.toml to {new_version}")
+    if not dry_run:
+        pyproject_path.write_text(content)
+        print(f"✓ Updated pyproject.toml to {new_version}")
+    else:
+        print(f"[dry-run] Would update pyproject.toml to {new_version}")
 
 
-def update_init_py(new_version: str) -> None:
+def update_init_py(new_version: str, dry_run: bool = False) -> None:
     """Update __version__ in src/flask/__init__.py."""
     init_path = ROOT / "src" / "flask" / "__init__.py"
+    if not init_path.exists():
+        print(f"⚠ Skipping src/flask/__init__.py (not found)")
+        return
     content = init_path.read_text()
+    if "__version__" not in content:
+        print(f"⚠ Skipping src/flask/__init__.py (no __version__)")
+        return
     content = re.sub(
         r'^__version__ = "[^"]+"',
         f'__version__ = "{new_version}"',
         content,
         flags=re.MULTILINE,
     )
-    init_path.write_text(content)
-    print(f"✓ Updated src/flask/__init__.py to {new_version}")
+    if not dry_run:
+        init_path.write_text(content)
+        print(f"✓ Updated src/flask/__init__.py to {new_version}")
+    else:
+        print(f"[dry-run] Would update src/flask/__init__.py to {new_version}")
 
 
-def update_docs_conf(new_version: str) -> None:
+def update_docs_conf(new_version: str, dry_run: bool = False) -> None:
     """Update version in docs/conf.py."""
     conf_path = ROOT / "docs" / "conf.py"
     if not conf_path.exists():
@@ -119,29 +132,47 @@ def update_docs_conf(new_version: str) -> None:
         content,
         flags=re.MULTILINE,
     )
-    conf_path.write_text(content)
-    print(f"✓ Updated docs/conf.py to {new_version}")
+    if not dry_run:
+        conf_path.write_text(content)
+        print(f"✓ Updated docs/conf.py to {new_version}")
+    else:
+        print(f"[dry-run] Would update docs/conf.py to {new_version}")
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: bump_version.py [major|minor|patch] [--dev]")
-        print("       bump_version.py X.Y.Z")
-        print("\nExamples:")
-        print("  bump_version.py patch          # 3.2.0 -> 3.2.1")
-        print("  bump_version.py minor --dev    # 3.2.0 -> 3.3.0.dev")
-        print("  bump_version.py 3.1.0          # Set to specific version")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        description="Bump Flask version in pyproject.toml, __init__.py, and docs/conf.py.",
+        epilog="""Examples:
+  bump_version.py patch          # 3.2.0 -> 3.2.1
+  bump_version.py minor --dev    # 3.2.0 -> 3.3.0.dev
+  bump_version.py 3.1.0          # Set to specific version
+  bump_version.py patch --dry-run # Show what would change without writing""",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "version",
+        help="Bump type (major/minor/patch) or specific version (X.Y.Z)",
+    )
+    parser.add_argument(
+        "--dev",
+        action="store_true",
+        help="Append .dev suffix to the new version",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would change without writing files",
+    )
 
-    arg = sys.argv[1]
-    dev = "--dev" in sys.argv
+    args = parser.parse_args()
+
     current = get_current_version()
     print(f"Current version: {current}")
 
     # Check if arg is a specific version or a bump type
-    if arg in ("major", "minor", "patch"):
+    if args.version in ("major", "minor", "patch"):
         current_tuple = parse_version(current)
-        new_tuple = bump_version(current_tuple, arg, dev=dev)
+        new_tuple = bump_version(current_tuple, args.version, dev=args.dev)
         major, minor, patch, suffix = new_tuple
         new_version = f"{major}.{minor}.{patch}"
         if suffix:
@@ -149,28 +180,31 @@ def main():
     else:
         # Validate the provided version
         try:
-            parse_version(arg)
-            new_version = arg
+            parse_version(args.version)
+            new_version = args.version
         except ValueError:
-            print(f"Error: '{arg}' is not a valid version or bump type")
+            print(f"Error: '{args.version}' is not a valid version or bump type", file=sys.stderr)
             sys.exit(1)
 
-    print(f"Bumping to: {new_version}\n")
+    print(f"Bumping to: {new_version}" + (" (dry-run)" if args.dry_run else "") + "\n")
 
     # Update all version locations
-    update_pyproject_toml(new_version)
-    update_init_py(new_version)
-    update_docs_conf(new_version)
+    update_pyproject_toml(new_version, dry_run=args.dry_run)
+    update_init_py(new_version, dry_run=args.dry_run)
+    update_docs_conf(new_version, dry_run=args.dry_run)
 
-    print(f"\n✅ Version bumped to {new_version}")
-    print("\nNext steps:")
-    print(f"  1. Update CHANGES.rst with release notes")
-    print(f"  2. Commit: git commit -am 'Release version {new_version}'")
-    if not dev:
-        print(f"  3. Tag: git tag -a v{new_version} -m 'Version {new_version}'")
-        print(f"  4. Push: git push origin main --tags")
+    if not args.dry_run:
+        print(f"\n✅ Version bumped to {new_version}")
+        print("\nNext steps:")
+        print(f"  1. Update CHANGES.rst with release notes")
+        print(f"  2. Commit: git commit -am 'Release version {new_version}'")
+        if not args.dev:
+            print(f"  3. Tag: git tag -a v{new_version} -m 'Version {new_version}'")
+            print(f"  4. Push: git push origin main --tags")
+        else:
+            print(f"  3. Push: git push origin main")
     else:
-        print(f"  3. Push: git push origin main")
+        print(f"\n[dry-run] No files were modified")
 
 
 if __name__ == "__main__":

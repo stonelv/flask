@@ -5,6 +5,19 @@ on:
   push:
     branches: [main, stable]
     paths-ignore: ['docs/**', 'README.md']
+  workflow_dispatch:
+    inputs:
+      block_on_regression:
+        description: 'Block PR on performance regression'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['true', 'false']
+      regression_threshold:
+        description: 'Regression threshold percentage'
+        required: false
+        default: '10'
+        type: string
 permissions: {}
 concurrency:
   group: benchmarks-${{ github.event.pull_request.number || github.ref }}
@@ -46,13 +59,19 @@ jobs:
 
       - name: Compare with baseline
         if: github.event_name == 'pull_request'
+        env:
+          BLOCK_ON_REGRESSION: ${{ github.event.inputs.block_on_regression || 'false' }}
+          REGRESSION_THRESHOLD: ${{ github.event.inputs.regression_threshold || '10' }}
         run: |
           if [ ! -f benchmarks/baseline.json ]; then
             echo "::warning::No baseline found, skipping comparison"
             exit 0
           fi
           python3 -c "
-          import json, sys
+          import json, sys, os
+
+          block = os.environ.get('BLOCK_ON_REGRESSION', 'false').lower() == 'true'
+          threshold = float(os.environ.get('REGRESSION_THRESHOLD', '10'))
 
           with open('benchmarks/baseline.json') as f:
               baseline = json.load(f)
@@ -67,7 +86,7 @@ jobs:
                   if base_bench['name'] == name:
                       base_mean = base_bench['stats']['mean']
                       change_pct = ((current_mean - base_mean) / base_mean) * 100
-                      if change_pct > 10:
+                      if change_pct > threshold:
                           regressions.append(
                               f'{name}: {current_mean:.6f}s vs baseline '
                               f'{base_mean:.6f}s ({change_pct:+.1f}%)'
@@ -75,13 +94,20 @@ jobs:
                       break
 
           if regressions:
-              print('::warning::Performance regressions detected:')
-              for r in regressions:
-                  print(f'  - {r}')
-              # Warning only - do not block PR
-              sys.exit(0)
+              msg = f'Performance regressions detected (>{threshold}%):'
+              if block:
+                  print(f'::error::{msg}')
+                  for r in regressions:
+                      print(f'  - {r}')
+                  sys.exit(1)
+              else:
+                  print(f'::warning::{msg}')
+                  for r in regressions:
+                      print(f'  - {r}')
+                  print('Note: Set block_on_regression=true to fail on regressions')
+                  sys.exit(0)
           else:
-              print('No performance regressions detected')
+              print(f'✓ No performance regressions detected (threshold: {threshold}%)')
           "
 
   update-baseline:

@@ -13,6 +13,7 @@ Usage:
     python scripts/bootstrap.py
 """
 
+import argparse
 import subprocess
 import sys
 from pathlib import Path
@@ -134,6 +135,21 @@ def print_next_steps() -> None:
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="Bootstrap Flask development environment.",
+        epilog="""Examples:
+  bootstrap.py                # full setup
+  bootstrap.py --skip-tests   # setup without running tests""",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--skip-tests",
+        action="store_true",
+        help="Skip running initial tests",
+    )
+
+    args = parser.parse_args()
+
     print("Flask Development Environment Bootstrap")
     print("=" * 60)
     print()
@@ -162,11 +178,15 @@ def main():
     setup_precommit()
     print()
 
-    # Step 5: Run initial tests
-    print("Step 5: Running initial tests")
-    print("-" * 60)
-    run_initial_tests()
-    print()
+    # Step 5: Run initial tests (optional)
+    if not args.skip_tests:
+        print("Step 5: Running initial tests")
+        print("-" * 60)
+        run_initial_tests()
+        print()
+    else:
+        print("Step 5: Skipping initial tests (--skip-tests)")
+        print()
 
     # Print next steps
     print_next_steps()

@@ -1,165 +1,126 @@
-name: Publish to PyPI
-
+name: Publish
 on:
   push:
-    tags:
-      - 'v*'
-
-permissions:
-  contents: read
-
+    tags: ['*']
+permissions: {}
+concurrency:
+  group: publish-${{ github.event.push.ref }}
+  cancel-in-progress: true
 jobs:
   validate:
-    name: Validate release
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.check.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-
-      - name: Check tag matches version
+      - name: Validate version
         id: check
         run: |
-          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          TAG_VERSION="${GITHUB_REF_NAME}"
           PYPROJECT_VERSION=$(grep '^version = ' pyproject.toml | cut -d'"' -f2)
-
           if [ "$TAG_VERSION" != "$PYPROJECT_VERSION" ]; then
-            echo "Error: Tag version ($TAG_VERSION) does not match pyproject.toml version ($PYPROJECT_VERSION)"
+            echo "Error: Tag ($TAG_VERSION) != pyproject.toml ($PYPROJECT_VERSION)"
             exit 1
           fi
-
+          if [[ "$TAG_VERSION" == *".dev"* ]]; then
+            echo "Error: Cannot publish dev version ($TAG_VERSION)"
+            exit 1
+          fi
           echo "version=$TAG_VERSION" >> $GITHUB_OUTPUT
-          echo "✓ Tag version matches pyproject.toml: $TAG_VERSION"
-
-      - name: Check not a dev version
-        run: |
-          VERSION="${{ steps.check.outputs.version }}"
-          if [[ "$VERSION" == *".dev"* ]] || [[ "$VERSION" == *"-dev"* ]]; then
-            echo "Error: Cannot publish dev version ($VERSION) to PyPI"
-            exit 1
-          fi
-          echo "✓ Not a dev version"
-
+          echo "✓ Validated: $TAG_VERSION"
   build:
-    name: Build distribution
     needs: validate
     runs-on: ubuntu-latest
+    outputs:
+      artifact-id: ${{ steps.upload-artifact.outputs.artifact-id }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
         with:
-          python-version: '3.12'
-
-      - name: Install build dependencies
-        run: python -m pip install build
-
-      - name: Build sdist and wheel
-        run: python -m build
-
-      - name: Store distribution artifacts
-        uses: actions/upload-artifact@v4
+          enable-cache: false
+          prune-cache: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version-file: pyproject.toml
+      - run: echo "SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)" >> $GITHUB_ENV
+      - run: uv build
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        id: upload-artifact
         with:
           name: dist
           path: dist/
-
+          if-no-files-found: error
   test-pypi:
-    name: Publish to TestPyPI
     needs: [validate, build]
-    runs-on: ubuntu-latest
     if: ${{ !contains(github.event.head_commit.message, '[skip testpypi]') }}
     environment:
       name: testpypi
-      url: https://test.pypi.org/project/flask/${{ needs.validate.outputs.version }}/
+      url: https://test.pypi.org/project/Flask/${{ needs.validate.outputs.version }}/
+    runs-on: ubuntu-latest
     permissions:
       id-token: write
     steps:
-      - name: Download distribution
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: dist
+          artifact-ids: ${{ needs.build.outputs.artifact-id }}
           path: dist/
-
-      - name: Publish to TestPyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # v1.13.0
         with:
           repository-url: https://test.pypi.org/legacy/
+          packages-dir: "dist/"
           skip-existing: true
-
-  pypi-publish:
-    name: Publish to PyPI
+  publish-pypi:
     needs: [validate, build, test-pypi]
     if: ${{ !failure() && !cancelled() }}
-    runs-on: ubuntu-latest
     environment:
-      name: pypi
-      url: https://pypi.org/project/flask/${{ needs.validate.outputs.version }}/
+      name: publish
+      url: https://pypi.org/project/Flask/${{ needs.validate.outputs.version }}/
+    runs-on: ubuntu-latest
     permissions:
       id-token: write
     steps:
-      - name: Download distribution
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: dist
+          artifact-ids: ${{ needs.build.outputs.artifact-id }}
           path: dist/
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-
-  github-release:
-    name: Create GitHub Release
-    needs: [validate, pypi-publish]
+      - uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # v1.13.0
+        with:
+          packages-dir: "dist/"
+  create-release:
+    needs: [validate, build, publish-pypi]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          persist-credentials: false
           fetch-depth: 0
-
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact-id }}
+          path: dist/
       - name: Extract release notes
-        id: notes
         run: |
           VERSION="${{ needs.validate.outputs.version }}"
-
-          # Try to extract from CHANGES.rst
           if [ -f CHANGES.rst ]; then
             awk "/^Version $VERSION/,/^Version / { if (/^Version / && !/^Version $VERSION/) exit; print }" CHANGES.rst | sed '1,2d' | sed '$d' > release_notes.md
           else
             echo "Release $VERSION" > release_notes.md
           fi
-
-          # If empty, generate from git log
           if [ ! -s release_notes.md ]; then
             PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
             if [ -n "$PREV_TAG" ]; then
               echo "## Changes since $PREV_TAG" > release_notes.md
               echo "" >> release_notes.md
               git log --pretty=format:"- %s (%h)" $PREV_TAG..HEAD >> release_notes.md
-            else
-              echo "## Release $VERSION" > release_notes.md
             fi
           fi
-
-          echo "notes_file=release_notes.md" >> $GITHUB_OUTPUT
-
-      - name: Download distribution
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*
-          body_path: ${{ steps.notes.outputs.notes_file }}
-          draft: false
-          prerelease: false
+      - name: Create release
+        run: gh release create --draft --repo ${GITHUB_REPOSITORY} --notes-file release_notes.md ${GITHUB_REF_NAME} dist/*
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}

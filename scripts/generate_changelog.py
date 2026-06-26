@@ -13,6 +13,7 @@ Examples:
     python scripts/generate_changelog.py v3.0.0 v3.1.0
 """
 
+import argparse
 import re
 import subprocess
 import sys
@@ -143,11 +144,14 @@ def format_changelog_entry(version: str, groups: dict[str, list[dict]]) -> str:
     return "\n".join(lines)
 
 
-def prepend_to_changes_file(new_entry: str) -> None:
+def prepend_to_changes_file(new_entry: str, dry_run: bool = False) -> None:
     """Prepend new changelog entry to CHANGES.rst."""
     if not CHANGES_FILE.exists():
-        print(f"⚠ CHANGES.rst not found, creating new file")
-        CHANGES_FILE.write_text(new_entry)
+        if dry_run:
+            print(f"[dry-run] Would create CHANGES.rst")
+        else:
+            print(f"⚠ CHANGES.rst not found, creating new file")
+            CHANGES_FILE.write_text(new_entry)
         return
 
     content = CHANGES_FILE.read_text()
@@ -162,17 +166,46 @@ def prepend_to_changes_file(new_entry: str) -> None:
         # No existing version entries, just prepend
         content = new_entry + "\n\n" + content
 
-    CHANGES_FILE.write_text(content)
-    print(f"✓ Updated CHANGES.rst")
+    if not dry_run:
+        CHANGES_FILE.write_text(content)
+        print(f"✓ Updated CHANGES.rst")
+    else:
+        print(f"[dry-run] Would update CHANGES.rst")
 
 
 def main():
-    from_ref = sys.argv[1] if len(sys.argv) > 1 else get_last_tag()
-    to_ref = sys.argv[2] if len(sys.argv) > 2 else "HEAD"
+    parser = argparse.ArgumentParser(
+        description="Generate changelog from git commits.",
+        epilog="""Examples:
+  generate_changelog.py                  # from last tag to HEAD
+  generate_changelog.py v3.0.0 v3.1.0    # specific range
+  generate_changelog.py --dry-run        # preview without writing""",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "from_ref",
+        nargs="?",
+        help="Starting git ref (tag or commit). Defaults to last tag.",
+    )
+    parser.add_argument(
+        "to_ref",
+        nargs="?",
+        default="HEAD",
+        help="Ending git ref (tag or commit). Defaults to HEAD.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be generated without writing files",
+    )
+
+    args = parser.parse_args()
+
+    from_ref = args.from_ref or get_last_tag()
+    to_ref = args.to_ref
 
     if not from_ref:
-        print("Error: No previous tag found and no from_ref specified")
-        print("Usage: generate_changelog.py [from_tag] [to_ref]")
+        print("Error: No previous tag found and no from_ref specified", file=sys.stderr)
         sys.exit(1)
 
     print(f"Generating changelog from {from_ref} to {to_ref}\n")
@@ -197,6 +230,10 @@ def main():
     print(entry)
     print("=" * 60)
     print()
+
+    if args.dry_run:
+        print("[dry-run] No files were modified")
+        return
 
     # Ask if user wants to update CHANGES.rst
     if to_ref == "HEAD":
