@@ -14,15 +14,21 @@ exporter in instead -- used by the tests to assert spans are emitted.
 
 from __future__ import annotations
 
-import os
 import time
 
 from flask import g, got_request_exception, request
 
-_otlp_endpoint = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT")
 # Module-level guard so repeated calls (e.g. across tests) don't try to
 # re-instrument logging.
 _logging_instrumented = False
+
+
+def _otlp_endpoint() -> str | None:
+    """Read the OTLP endpoint at call time (not import time) so tests can
+    toggle it with ``monkeypatch.delenv`` without reloading the module."""
+    import os
+
+    return os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT")
 
 
 def setup_telemetry(app, *, span_exporter=None) -> None:
@@ -44,9 +50,7 @@ def setup_telemetry(app, *, span_exporter=None) -> None:
     )
     from opentelemetry.trace import Status, StatusCode
 
-    resource = Resource.create(
-        {"service.name": "flask-observability-example"}
-    )
+    resource = Resource.create({"service.name": "flask-observability-example"})
 
     # --- traces: set the global provider only once (avoids the "overriding
     # is not allowed" warning), then attach the chosen span processor. ---
@@ -57,7 +61,7 @@ def setup_telemetry(app, *, span_exporter=None) -> None:
 
     if span_exporter is not None:
         provider.add_span_processor(SimpleSpanProcessor(span_exporter))
-    elif _otlp_endpoint:
+    elif _otlp_endpoint():
         from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
             OTLPSpanExporter,
         )
@@ -67,7 +71,7 @@ def setup_telemetry(app, *, span_exporter=None) -> None:
         provider.add_span_processor(BatchSpanProcessor(ConsoleSpanExporter()))
 
     # --- metrics: skip entirely in unit tests (span_exporter set); otherwise
-    # console or OTLP. ---
+    # console or OTLP. Set the global meter provider only once. ---
     if span_exporter is None:
         from opentelemetry.sdk.metrics import MeterProvider
         from opentelemetry.sdk.metrics.export import (
@@ -75,17 +79,19 @@ def setup_telemetry(app, *, span_exporter=None) -> None:
             PeriodicExportingMetricReader,
         )
 
-        if _otlp_endpoint:
-            from opentelemetry.exporter.otlp.proto.http.metric_exporter import (
-                OTLPMetricExporter,
-            )
+        current = metrics.get_meter_provider()
+        if not isinstance(current, MeterProvider):
+            if _otlp_endpoint():
+                from opentelemetry.exporter.otlp.proto.http.metric_exporter import (
+                    OTLPMetricExporter,
+                )
 
-            reader = PeriodicExportingMetricReader(OTLPMetricExporter())
-        else:
-            reader = PeriodicExportingMetricReader(ConsoleMetricExporter())
-        metrics.set_meter_provider(
-            MeterProvider(resource=resource, metric_readers=[reader])
-        )
+                reader = PeriodicExportingMetricReader(OTLPMetricExporter())
+            else:
+                reader = PeriodicExportingMetricReader(ConsoleMetricExporter())
+            metrics.set_meter_provider(
+                MeterProvider(resource=resource, metric_readers=[reader])
+            )
 
     # --- logs: add trace context to log records. Idempotent. ---
     global _logging_instrumented
@@ -99,9 +105,7 @@ def setup_telemetry(app, *, span_exporter=None) -> None:
 
     tracer = trace.get_tracer(__name__)
     meter = metrics.get_meter(__name__)
-    request_duration = meter.create_histogram(
-        "flask.request.duration", unit="ms"
-    )
+    request_duration = meter.create_histogram("flask.request.duration", unit="ms")
     error_counter = meter.create_counter("flask.request.errors")
 
     @app.before_request
@@ -115,9 +119,7 @@ def setup_telemetry(app, *, span_exporter=None) -> None:
         attrs = {"route": request.path, "method": request.method}
         request_duration.record(duration_ms, attrs)
         if response.status_code >= 500:
-            error_counter.add(
-                1, {**attrs, "status": str(response.status_code)}
-            )
+            error_counter.add(1, {**attrs, "status": str(response.status_code)})
         return response
 
     @got_request_exception.connect_via(app)

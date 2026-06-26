@@ -6,90 +6,90 @@
 
 Unreleased
 
-- Drop support for Python 3.9. 5730
-- Remove previously deprecated code: ``__version__``. 5648
+- Drop support for Python 3.9. (#5730)
+- Remove previously deprecated code: ``__version__``. (#5648)
 - ``RequestContext`` has merged with ``AppContext``. ``RequestContext`` is now
   a deprecated alias. If an app context is already pushed, it is not reused
   when dispatching a request. This greatly simplifies the internal code for tracking
-  the active context. 5639
+  the active context. (#5639)
 - Many ``Flask`` methods involved in request dispatch now take the current
   ``AppContext`` as the first parameter, instead of using the proxy objects.
   If subclasses were overriding these methods, the old signature is detected,
   shows a deprecation warning, and will continue to work during the
-  deprecation period. 5815
-- All teardown callbacks are called, even if any raise an error. 5928
+  deprecation period. (#5815)
+- All teardown callbacks are called, even if any raise an error. (#5928)
 - The ``should_ignore_error`` is deprecated. Handle errors as needed in
-  teardown handlers instead. 5816
+  teardown handlers instead. (#5816)
 - ``template_filter``, ``template_test``, and ``template_global`` decorators
-  can be used without parentheses. 5729
+  can be used without parentheses. (#5729)
 - ``redirect`` returns a ``303`` status code by default instead of ``302``.
   This tells the client to always switch to ``GET``, rather than only
   switching ``POST`` to ``GET``. This preserves the current behavior of
   ``GET`` and ``POST`` redirects, and is also correct for frontend libraries
-  such as HTMX. 5895
+  such as HTMX. (#5895)
 - ``provide_automatic_options=True`` can be used to enable it for a view when
-  it's disabled in config. Previously, only disabling worked. 5916
+  it's disabled in config. Previously, only disabling worked. (#5916)
 - ``Flask.select_jinja_autoescape`` uses case-insensitive comparison instead
-  of only lower case file extensions. 6012
+  of only lower case file extensions. (#6012)
 
 ## 3.1.3
 
 Released 2026-02-18
 
 - The session is marked as accessed for operations that only access the keys
-  but not the values, such as ``in`` and ``len``. 68rp-wp8r-4726
+  but not the values, such as ``in`` and ``len``. [security advisory 68rp-wp8r-4726]
 
 ## 3.1.2
 
 Released 2025-08-19
 
-- ``stream_with_context`` does not fail inside async views. 5774
+- ``stream_with_context`` does not fail inside async views. (#5774)
 - When using ``follow_redirects`` in the test client, the final state
-  of ``session`` is correct. 5786
-- Relax type hint for passing bytes IO to ``send_file``. 5776
+  of ``session`` is correct. (#5786)
+- Relax type hint for passing bytes IO to ``send_file``. (#5776)
 
 ## 3.1.1
 
 Released 2025-05-13
 
 - Fix signing key selection order when key rotation is enabled via
-  ``SECRET_KEY_FALLBACKS``. 4grg-w6v8-c28g
-- Fix type hint for ``cli_runner.invoke``. 5645
+  ``SECRET_KEY_FALLBACKS``. [security advisory 4grg-w6v8-c28g]
+- Fix type hint for ``cli_runner.invoke``. (#5645)
 - ``flask --help`` loads the app and plugins first to make sure all commands
-  are shown. 5673
+  are shown. (#5673)
 - Mark sans-io base class as being able to handle views that return
   ``AsyncIterable``. This is not accurate for Flask, but makes typing easier
-  for Quart. 5659
+  for Quart. (#5659)
 
 ## 3.1.0
 
 Released 2024-11-13
 
-- Drop support for Python 3.8. 5623
+- Drop support for Python 3.8. (#5623)
 - Update minimum dependency versions to latest feature releases.
-  Werkzeug >= 3.1, ItsDangerous >= 2.2, Blinker >= 1.9. 5624,5633
+  Werkzeug >= 3.1, ItsDangerous >= 2.2, Blinker >= 1.9. (#5624,5633)
 - Provide a configuration option to control automatic option
-  responses. 5496
+  responses. (#5496)
 - ``Flask.open_resource``/``open_instance_resource`` and
   ``Blueprint.open_resource`` take an ``encoding`` parameter to use when
-  opening in text mode. It defaults to ``utf-8``. 5504
+  opening in text mode. It defaults to ``utf-8``. (#5504)
 - ``Request.max_content_length`` can be customized per-request instead of only
   through the ``MAX_CONTENT_LENGTH`` config. Added
   ``MAX_FORM_MEMORY_SIZE`` and ``MAX_FORM_PARTS`` config. Added documentation
-  about resource limits to the security page. 5625
+  about resource limits to the security page. (#5625)
 - Add support for the ``Partitioned`` cookie attribute (CHIPS), with the
-  ``SESSION_COOKIE_PARTITIONED`` config. 5472
+  ``SESSION_COOKIE_PARTITIONED`` config. (#5472)
 - ``-e path`` takes precedence over default ``.env`` and ``.flaskenv`` files.
   ``load_dotenv`` loads default files in addition to a path unless
-  ``load_defaults=False`` is passed. 5628
+  ``load_defaults=False`` is passed. (#5628)
 - Support key rotation with the ``SECRET_KEY_FALLBACKS`` config, a list of old
   secret keys that can still be used for unsigning. Extensions will need to
-  add support. 5621
+  add support. (#5621)
 - Fix how setting ``host_matching=True`` or ``subdomain_matching=False``
   interacts with ``SERVER_NAME``. Setting ``SERVER_NAME`` no longer restricts
-  requests to only that domain. 5553
+  requests to only that domain. (#5553)
 - ``Request.trusted_hosts`` is checked during routing, and can be set through
-  the ``TRUSTED_HOSTS`` config. 5636
+  the ``TRUSTED_HOSTS`` config. (#5636)
 
 ## 3.0.3
 
@@ -97,39 +97,39 @@ Released 2024-04-07
 
 - The default ``hashlib.sha1`` may not be available in FIPS builds. Don't
   access it at import time so the developer has time to change the default.
-  5448
+  (#5448)
 - Don't initialize the ``cli`` attribute in the sansio scaffold, but rather in
-  the ``Flask`` concrete class. 5270
+  the ``Flask`` concrete class. (#5270)
 
 ## 3.0.2
 
 Released 2024-02-03
 
-- Correct type for ``jinja_loader`` property. 5388
+- Correct type for ``jinja_loader`` property. (#5388)
 - Fix error with ``--extra-files`` and ``--exclude-patterns`` CLI options.
-  5391
+  (#5391)
 
 ## 3.0.1
 
 Released 2024-01-18
 
-- Correct type for ``path`` argument to ``send_file``. 5336
-- Fix a typo in an error message for the ``flask run --key`` option. 5344
+- Correct type for ``path`` argument to ``send_file``. (#5336)
+- Fix a typo in an error message for the ``flask run --key`` option. (#5344)
 - Session data is untagged without relying on the built-in ``json.loads``
   ``object_hook``. This allows other JSON providers that don't implement that.
-  5381
-- Address more type findings when using mypy strict mode. 5383
+  (#5381)
+- Address more type findings when using mypy strict mode. (#5383)
 
 ## 3.0.0
 
 Released 2023-09-30
 
-- Remove previously deprecated code. 5223
+- Remove previously deprecated code. (#5223)
 - Deprecate the ``__version__`` attribute. Use feature detection, or
-  ``importlib.metadata.version("flask")``, instead. 5230
+  ``importlib.metadata.version("flask")``, instead. (#5230)
 - Restructure the code such that the Flask (app) and Blueprint
-  classes have Sans-IO bases. 5127
-- Allow self as an argument to url_for. 5264
+  classes have Sans-IO bases. (#5127)
+- Allow self as an argument to url_for. (#5264)
 - Require Werkzeug >= 3.0.0.
 
 ## 2.3.3
@@ -139,7 +139,7 @@ Released 2023-08-21
 - Python 3.12 compatibility.
 - Require Werkzeug >= 2.3.7.
 - Use ``flit_core`` instead of ``setuptools`` as build backend.
-- Refactor how an app's root and instance paths are determined. 5160
+- Refactor how an app's root and instance paths are determined. (#5160)
 
 ## 2.3.2
 
@@ -147,22 +147,22 @@ Released 2023-05-01
 
 - Set ``Vary: Cookie`` header when the session is accessed, modified, or refreshed.
 - Update Werkzeug requirement to >=2.3.3 to apply recent bug fixes.
-  m2qf-hxjv-5gpq
+  [security advisory m2qf-hxjv-5gpq]
 
 ## 2.3.1
 
 Released 2023-04-25
 
-- Restore deprecated ``from flask import Markup``. 5084
+- Restore deprecated ``from flask import Markup``. (#5084)
 
 ## 2.3.0
 
 Released 2023-04-25
 
-- Drop support for Python 3.7. 5072
+- Drop support for Python 3.7. (#5072)
 - Update minimum requirements to the latest versions: Werkzeug>=2.3.0, Jinja2>3.1.2,
   itsdangerous>=2.1.2, click>=8.1.3.
-- Remove previously deprecated code. 4995
+- Remove previously deprecated code. (#4995)
 
 - The ``push`` and ``pop`` methods of the deprecated ``_app_ctx_stack`` and
   ``_request_ctx_stack`` objects are removed. ``top`` still exists to give
@@ -180,32 +180,32 @@ Released 2023-04-25
   corresponding ``json.JSONEncoder`` and ``JSONDecoder`` classes, are removed.
 - The ``json.htmlsafe_dumps`` and ``htmlsafe_dump`` functions are removed.
 - Calling setup methods on blueprints after registration is an error instead of a
-  warning. 4997
+  warning. (#4997)
 
 - Importing ``escape`` and ``Markup`` from ``flask`` is deprecated. Import them
-  directly from ``markupsafe`` instead. 4996
-- The ``app.got_first_request`` property is deprecated. 4997
+  directly from ``markupsafe`` instead. (#4996)
+- The ``app.got_first_request`` property is deprecated. (#4997)
 - The ``locked_cached_property`` decorator is deprecated. Use a lock inside the
-  decorated function if locking is needed. 4993
+  decorated function if locking is needed. (#4993)
 - Signals are always available. ``blinker>=1.6.2`` is a required dependency. The
-  ``signals_available`` attribute is deprecated. 5056
-- Signals support ``async`` subscriber functions. 5049
+  ``signals_available`` attribute is deprecated. (#5056)
+- Signals support ``async`` subscriber functions. (#5049)
 - Remove uses of locks that could cause requests to block each other very briefly.
-  4993
+  (#4993)
 - Use modern packaging metadata with ``pyproject.toml`` instead of ``setup.cfg``.
-  4947
-- Ensure subdomains are applied with nested blueprints. 4834
+  (#4947)
+- Ensure subdomains are applied with nested blueprints. (#4834)
 - ``config.from_file`` can use ``text=False`` to indicate that the parser wants a
-  binary file instead. 4989
+  binary file instead. (#4989)
 - If a blueprint is created with an empty name it raises a ``ValueError``.
-  5010
+  (#5010)
 - ``SESSION_COOKIE_DOMAIN`` does not fall back to ``SERVER_NAME``. The default is not
   to set the domain, which modern browsers interpret as an exact match rather than
   a subdomain match. Warnings about ``localhost`` and IP addresses are also removed.
-  5051
+  (#5051)
 - The ``routes`` command shows each rule's ``subdomain`` or ``host`` when domain
-  matching is in use. 5004
-- Use postponed evaluation of annotations. 5071
+  matching is in use. (#5004)
+- Use postponed evaluation of annotations. (#5071)
 
 ## 2.2.5
 
@@ -224,9 +224,9 @@ Released 2023-04-25
 
 Released 2023-02-15
 
-- Autoescape is enabled by default for ``.svg`` template files. 4831
-- Fix the type of ``template_folder`` to accept ``pathlib.Path``. 4892
-- Add ``--debug`` option to the ``flask run`` command. 4777
+- Autoescape is enabled by default for ``.svg`` template files. (#4831)
+- Fix the type of ``template_folder`` to accept ``pathlib.Path``. (#4892)
+- Add ``--debug`` option to the ``flask run`` command. (#4777)
 
 ## 2.2.2
 
@@ -234,22 +234,22 @@ Released 2022-08-08
 
 - Update Werkzeug dependency to >= 2.2.2. This includes fixes related
   to the new faster router, header parsing, and the development
-  server. 4754
+  server. (#4754)
 - Fix the default value for ``app.env`` to be ``"production"``. This
-  attribute remains deprecated. 4740
+  attribute remains deprecated. (#4740)
 
 ## 2.2.1
 
 Released 2022-08-03
 
 - Setting or accessing ``json_encoder`` or ``json_decoder`` raises a
-  deprecation warning. 4732
+  deprecation warning. (#4732)
 
 ## 2.2.0
 
 Released 2022-08-01
 
-- Remove previously deprecated code. 4667
+- Remove previously deprecated code. (#4667)
 
 - Old names for some ``send_file`` parameters have been removed.
   ``download_name`` replaces ``attachment_filename``, ``max_age``
@@ -262,7 +262,7 @@ Released 2022-08-01
 - Update Werkzeug dependency to >= 2.2.
 - The app and request contexts are managed using Python context vars
   directly rather than Werkzeug's ``LocalStack``. This should result
-  in better performance and memory use. 4682
+  in better performance and memory use. (#4682)
 
 - Extension maintainers, be aware that ``_app_ctx_stack.top``
   and ``_request_ctx_stack.top`` are deprecated. Store data on
@@ -272,70 +272,70 @@ Released 2022-08-01
 - The ``FLASK_ENV`` environment variable and ``app.env`` attribute are
   deprecated, removing the distinction between development and debug
   mode. Debug mode should be controlled directly using the ``--debug``
-  option or ``app.run(debug=True)``. 4714
+  option or ``app.run(debug=True)``. (#4714)
 - Some attributes that proxied config keys on ``app`` are deprecated:
   ``session_cookie_name``, ``send_file_max_age_default``,
   ``use_x_sendfile``, ``propagate_exceptions``, and
   ``templates_auto_reload``. Use the relevant config keys instead.
-  4716
+  (#4716)
 - Add new customization points to the ``Flask`` app object for many
   previously global behaviors.
 
-- ``flask.url_for`` will call ``app.url_for``. 4568
+- ``flask.url_for`` will call ``app.url_for``. (#4568)
 - ``flask.abort`` will call ``app.aborter``.
   ``Flask.aborter_class`` and ``Flask.make_aborter`` can be used
-  to customize this aborter. 4567
-- ``flask.redirect`` will call ``app.redirect``. 4569
+  to customize this aborter. (#4567)
+- ``flask.redirect`` will call ``app.redirect``. (#4569)
 - ``flask.json`` is an instance of ``JSONProvider``. A different
   provider can be set to use a different JSON library.
   ``flask.jsonify`` will call ``app.json.response``, other
   functions in ``flask.json`` will call corresponding functions in
-  ``app.json``. 4692
+  ``app.json``. (#4692)
 
 - JSON configuration is moved to attributes on the default
   ``app.json`` provider. ``JSON_AS_ASCII``, ``JSON_SORT_KEYS``,
   ``JSONIFY_MIMETYPE``, and ``JSONIFY_PRETTYPRINT_REGULAR`` are
-  deprecated. 4692
+  deprecated. (#4692)
 - Setting custom ``json_encoder`` and ``json_decoder`` classes on the
   app or a blueprint, and the corresponding ``json.JSONEncoder`` and
   ``JSONDecoder`` classes, are deprecated. JSON behavior can now be
-  overridden using the ``app.json`` provider interface. 4692
+  overridden using the ``app.json`` provider interface. (#4692)
 - ``json.htmlsafe_dumps`` and ``json.htmlsafe_dump`` are deprecated,
-  the function is built-in to Jinja now. 4692
+  the function is built-in to Jinja now. (#4692)
 - Refactor ``register_error_handler`` to consolidate error checking.
-  Rewrite some error messages to be more consistent. 4559
+  Rewrite some error messages to be more consistent. (#4559)
 - Use Blueprint decorators and functions intended for setup after
   registering the blueprint will show a warning. In the next version,
   this will become an error just like the application setup methods.
-  4571
+  (#4571)
 - ``before_first_request`` is deprecated. Run setup code when creating
-  the application instead. 4605
+  the application instead. (#4605)
 - Added the ``View.init_every_request`` class attribute. If a view
   subclass sets this to ``False``, the view will not create a new
-  instance on every request. 2520.
+  instance on every request. (#2520).
 - A ``flask.cli.FlaskGroup`` Click group can be nested as a
-  sub-command in a custom CLI. 3263
+  sub-command in a custom CLI. (#3263)
 - Add ``--app`` and ``--debug`` options to the ``flask`` CLI, instead
   of requiring that they are set through environment variables.
-  2836
+  (#2836)
 - Add ``--env-file`` option to the ``flask`` CLI. This allows
   specifying a dotenv file to load in addition to ``.env`` and
-  ``.flaskenv``. 3108
+  ``.flaskenv``. (#3108)
 - It is no longer required to decorate custom CLI commands on
   ``app.cli`` or ``blueprint.cli`` with ``@with_appcontext``, an app
-  context will already be active at that point. 2410
+  context will already be active at that point. (#2410)
 - ``SessionInterface.get_expiration_time`` uses a timezone-aware
-  value. 4645
+  value. (#4645)
 - View functions can return generators directly instead of wrapping
-  them in a ``Response``. 4629
+  them in a ``Response``. (#4629)
 - Add ``stream_template`` and ``stream_template_string`` functions to
-  render a template as a stream of pieces. 4629
+  render a template as a stream of pieces. (#4629)
 - A new implementation of context preservation during debugging and
-  testing. 4666
+  testing. (#4666)
 
 - ``request``, ``g``, and other context-locals point to the
   correct data when running code in the interactive debugger
-  console. 2836
+  console. (#2836)
 - Teardown functions are always run at the end of the request,
   even if the context is preserved. They are also run after the
   preserved context is popped.
@@ -344,52 +344,52 @@ Released 2022-08-01
   ``response.get_data()`` or ``response.close()`` is called.
 
 - Allow returning a list from a view function, to convert it to a
-  JSON response like a dict is. 4672
+  JSON response like a dict is. (#4672)
 - When type checking, allow ``TypedDict`` to be returned from view
-  functions. 4695
+  functions. (#4695)
 - Remove the ``--eager-loading/--lazy-loading`` options from the
   ``flask run`` command. The app is always eager loaded the first
   time, then lazily loaded in the reloader. The reloader always prints
   errors immediately but continues serving. Remove the internal
   ``DispatchingApp`` middleware used by the previous implementation.
-  4715
+  (#4715)
 
 ## 2.1.3
 
 Released 2022-07-13
 
 - Inline some optional imports that are only used for certain CLI
-  commands. 4606
-- Relax type annotation for ``after_request`` functions. 4600
+  commands. (#4606)
+- Relax type annotation for ``after_request`` functions. (#4600)
 - ``instance_path`` for namespace packages uses the path closest to
-  the imported submodule. 4610
+  the imported submodule. (#4610)
 - Clearer error message when ``render_template`` and
   ``render_template_string`` are used outside an application context.
-  4693
+  (#4693)
 
 ## 2.1.2
 
 Released 2022-04-28
 
 - Fix type annotation for ``json.loads``, it accepts str or bytes.
-  4519
+  (#4519)
 - The ``--cert`` and ``--key`` options on ``flask run`` can be given
-  in either order. 4459
+  in either order. (#4459)
 
 ## 2.1.1
 
 Released on 2022-03-30
 
 - Set the minimum required version of importlib_metadata to 3.6.0,
-  which is required on Python < 3.10. 4502
+  which is required on Python < 3.10. (#4502)
 
 ## 2.1.0
 
 Released 2022-03-28
 
-- Drop support for Python 3.6. 4335
-- Update Click dependency to >= 8.0. 4008
-- Remove previously deprecated code. 4337
+- Drop support for Python 3.6. (#4335)
+- Update Click dependency to >= 8.0. (#4008)
+- Remove previously deprecated code. (#4337)
 
 - The CLI does not pass ``script_info`` to app factory functions.
 - ``config.from_json`` is replaced by
@@ -402,7 +402,7 @@ Released 2022-03-28
 - The same blueprint cannot be registered with the same name. Use
   ``name=`` when registering to specify a unique name.
 - The test client's ``as_tuple`` parameter is removed. Use
-  ``response.request.environ`` instead. 4417
+  ``response.request.environ`` instead. (#4417)
 
 - Some parameters in ``send_file`` and ``send_from_directory`` were
   renamed in 2.0. The deprecation period for the old names is extended
@@ -414,33 +414,33 @@ Released 2022-03-28
 - ``filename`` is renamed to ``path``.
 
 - The ``RequestContext.g`` property is deprecated. Use ``g`` directly
-  or ``AppContext.g`` instead. 3898
+  or ``AppContext.g`` instead. (#3898)
 - ``copy_current_request_context`` can decorate async functions.
-  4303
+  (#4303)
 - The CLI uses ``importlib.metadata`` instead of ``pkg_resources`` to
-  load command entry points. 4419
+  load command entry points. (#4419)
 - Overriding ``FlaskClient.open`` will not cause an error on redirect.
-  3396
+  (#3396)
 - Add an ``--exclude-patterns`` option to the ``flask run`` CLI
   command to specify patterns that will be ignored by the reloader.
-  4188
+  (#4188)
 - When using lazy loading (the default with the debugger), the Click
   context from the ``flask run`` command remains available in the
-  loader thread. 4460
+  loader thread. (#4460)
 - Deleting the session cookie uses the ``httponly`` flag.
-  4485
+  (#4485)
 - Relax typing for ``errorhandler`` to allow the user to use more
   precise types and decorate the same function multiple times.
-  4095, 4295, 4297
+  (#4095, 4295, 4297)
 - Fix typing for ``__exit__`` methods for better compatibility with
-  ``ExitStack``. 4474
+  ``ExitStack``. (#4474)
 - From Werkzeug, for redirect responses the ``Location`` header URL
   will remain relative, and exclude the scheme and domain, by default.
-  4496
+  (#4496)
 - Add ``Config.from_prefixed_env()`` to load config values from
   environment variables that start with ``FLASK_`` or another prefix.
   This parses values as JSON by default, and allows setting keys in
-  nested dicts. 4479
+  nested dicts. (#4479)
 
 ## 2.0.3
 
@@ -449,39 +449,39 @@ Released 2022-02-14
 - The test client's ``as_tuple`` parameter is deprecated and will be
   removed in Werkzeug 2.1. It is now also deprecated in Flask, to be
   removed in Flask 2.1, while remaining compatible with both in
-  2.0.x. Use ``response.request.environ`` instead. 4341
-- Fix type annotation for ``errorhandler`` decorator. 4295
+  2.0.x. Use ``response.request.environ`` instead. (#4341)
+- Fix type annotation for ``errorhandler`` decorator. (#4295)
 - Revert a change to the CLI that caused it to hide ``ImportError``
-  tracebacks when importing the application. 4307
+  tracebacks when importing the application. (#4307)
 - ``app.json_encoder`` and ``json_decoder`` are only passed to
   ``dumps`` and ``loads`` if they have custom behavior. This improves
-  performance, mainly on PyPy. 4349
+  performance, mainly on PyPy. (#4349)
 - Clearer error message when ``after_this_request`` is used outside a
-  request context. 4333
+  request context. (#4333)
 
 ## 2.0.2
 
 Released 2021-10-04
 
-- Fix type annotation for ``teardown_*`` methods. 4093
+- Fix type annotation for ``teardown_*`` methods. (#4093)
 - Fix type annotation for ``before_request`` and ``before_app_request``
-  decorators. 4104
+  decorators. (#4104)
 - Fixed the issue where typing requires template global
-  decorators to accept functions with no arguments. 4098
-- Support View and MethodView instances with async handlers. 4112
-- Enhance typing of ``app.errorhandler`` decorator. 4095
-- Fix registering a blueprint twice with differing names. 4124
+  decorators to accept functions with no arguments. (#4098)
+- Support View and MethodView instances with async handlers. (#4112)
+- Enhance typing of ``app.errorhandler`` decorator. (#4095)
+- Fix registering a blueprint twice with differing names. (#4124)
 - Fix the type of ``static_folder`` to accept ``pathlib.Path``.
-  4150
+  (#4150)
 - ``jsonify`` handles ``decimal.Decimal`` by encoding to ``str``.
-  4157
+  (#4157)
 - Correctly handle raising deferred errors in CLI lazy loading.
-  4096
+  (#4096)
 - The CLI loader handles ``**kwargs`` in a ``create_app`` function.
-  4170
+  (#4170)
 - Fix the order of ``before_request`` and other callbacks that trigger
   before the view returns. They are called from the app down to the
-  closest nested blueprint. 4229
+  closest nested blueprint. (#4229)
 
 ## 2.0.1
 
@@ -489,35 +489,35 @@ Released 2021-05-21
 
 - Re-add the ``filename`` parameter in ``send_from_directory``. The
   ``filename`` parameter has been renamed to ``path``, the old name
-  is deprecated. 4019
+  is deprecated. (#4019)
 - Mark top-level names as exported so type checking understands
-  imports in user projects. 4024
+  imports in user projects. (#4024)
 - Fix type annotation for ``g`` and inform mypy that it is a namespace
-  object that has arbitrary attributes. 4020
-- Fix some types that weren't available in Python 3.6.0. 4040
+  object that has arbitrary attributes. (#4020)
+- Fix some types that weren't available in Python 3.6.0. (#4040)
 - Improve typing for ``send_file``, ``send_from_directory``, and
-  ``get_send_file_max_age``. 4044, 4026
+  ``get_send_file_max_age``. (#4044), (#4026)
 - Show an error when a blueprint name contains a dot. The ``.`` has
   special meaning, it is used to separate (nested) blueprint names and
-  the endpoint name. 4041
+  the endpoint name. (#4041)
 - Combine URL prefixes when nesting blueprints that were created with
-  a ``url_prefix`` value. 4037
+  a ``url_prefix`` value. (#4037)
 - Revert a change to the order that URL matching was done. The
   URL is again matched after the session is loaded, so the session is
-  available in custom URL converters. 4053
+  available in custom URL converters. (#4053)
 - Re-add deprecated ``Config.from_json``, which was accidentally
-  removed early. 4078
+  removed early. (#4078)
 - Improve typing for some functions using ``Callable`` in their type
-  signatures, focusing on decorator factories. 4060
+  signatures, focusing on decorator factories. (#4060)
 - Nested blueprints are registered with their dotted name. This allows
   different blueprints with the same name to be nested at different
-  locations. 4069
+  locations. (#4069)
 - ``register_blueprint`` takes a ``name`` option to change the
   (pre-dotted) name the blueprint is registered with. This allows the
   same blueprint to be registered multiple times with unique names for
   ``url_for``. Registering the same blueprint with the same name
-  multiple times is deprecated. 1091
-- Improve typing for ``stream_with_context``. 4052
+  multiple times is deprecated. (#1091)
+- Improve typing for ``stream_with_context``. (#4052)
 
 ## 2.0.0
 
@@ -531,101 +531,101 @@ Released 2021-05-11
   there is no hard dependency on Click 8 yet, but using Click 7 will
   trigger a DeprecationWarning and Flask 2.1 will depend on Click 8.
 - JSON support no longer uses simplejson. To use another JSON module,
-  override ``app.json_encoder`` and ``json_decoder``. 3555
-- The ``encoding`` option to JSON functions is deprecated. 3562
+  override ``app.json_encoder`` and ``json_decoder``. (#3555)
+- The ``encoding`` option to JSON functions is deprecated. (#3562)
 - Passing ``script_info`` to app factory functions is deprecated. This
   was not portable outside the ``flask`` command. Use
-  ``click.get_current_context().obj`` if it's needed. 3552
+  ``click.get_current_context().obj`` if it's needed. (#3552)
 - The CLI shows better error messages when the app failed to load
-  when looking up commands. 2741
+  when looking up commands. (#2741)
 - Add ``SessionInterface.get_cookie_name`` to allow setting the
-  session cookie name dynamically. 3369
+  session cookie name dynamically. (#3369)
 - Add ``Config.from_file`` to load config using arbitrary file
   loaders, such as ``toml.load`` or ``json.load``.
-  ``Config.from_json`` is deprecated in favor of this. 3398
+  ``Config.from_json`` is deprecated in favor of this. (#3398)
 - The ``flask run`` command will only defer errors on reload. Errors
   present during the initial call will cause the server to exit with
-  the traceback immediately. 3431
+  the traceback immediately. (#3431)
 - ``send_file`` raises a ``ValueError`` when passed an ``io`` object
   in text mode. Previously, it would respond with 200 OK and an empty
-  file. 3358
+  file. (#3358)
 - When using ad-hoc certificates, check for the cryptography library
-  instead of PyOpenSSL. 3492
+  instead of PyOpenSSL. (#3492)
 - When specifying a factory function with ``FLASK_APP``, keyword
-  argument can be passed. 3553
+  argument can be passed. (#3553)
 - When loading a ``.env`` or ``.flaskenv`` file, the current working
   directory is no longer changed to the location of the file.
-  3560
+  (#3560)
 - When returning a ``(response, headers)`` tuple from a view, the
   headers replace rather than extend existing headers on the response.
   For example, this allows setting the ``Content-Type`` for
   ``jsonify()``. Use ``response.headers.extend()`` if extending is
-  desired. 3628
+  desired. (#3628)
 - The ``Scaffold`` class provides a common API for the ``Flask`` and
   ``Blueprint`` classes. ``Blueprint`` information is stored in
   attributes just like ``Flask``, rather than opaque lambda functions.
   This is intended to improve consistency and maintainability.
-  3215
+  (#3215)
 - Include ``samesite`` and ``secure`` options when removing the
-  session cookie. 3726
-- Support passing a ``pathlib.Path`` to ``static_folder``. 3579
+  session cookie. (#3726)
+- Support passing a ``pathlib.Path`` to ``static_folder``. (#3579)
 - ``send_file`` and ``send_from_directory`` are wrappers around the
-  implementations in ``werkzeug.utils``. 3828
+  implementations in ``werkzeug.utils``. (#3828)
 - Some ``send_file`` parameters have been renamed, the old names are
   deprecated. ``attachment_filename`` is renamed to ``download_name``.
   ``cache_timeout`` is renamed to ``max_age``. ``add_etags`` is
-  renamed to ``etag``. 3828, 3883
+  renamed to ``etag``. (#3828, 3883)
 - ``send_file`` passes ``download_name`` even if
   ``as_attachment=False`` by using ``Content-Disposition: inline``.
-  3828
+  (#3828)
 - ``send_file`` sets ``conditional=True`` and ``max_age=None`` by
   default. ``Cache-Control`` is set to ``no-cache`` if ``max_age`` is
   not set, otherwise ``public``. This tells browsers to validate
-  conditional requests instead of using a timed cache. 3828
+  conditional requests instead of using a timed cache. (#3828)
 - ``helpers.safe_join`` is deprecated. Use
-  ``werkzeug.utils.safe_join`` instead. 3828
+  ``werkzeug.utils.safe_join`` instead. (#3828)
 - The request context does route matching before opening the session.
   This could allow a session interface to change behavior based on
-  ``request.endpoint``. 3776
-- Use Jinja's implementation of the ``|tojson`` filter. 3881
+  ``request.endpoint``. (#3776)
+- Use Jinja's implementation of the ``|tojson`` filter. (#3881)
 - Add route decorators for common HTTP methods. For example,
   ``@app.post("/login")`` is a shortcut for
-  ``@app.route("/login", methods=["POST"])``. 3907
+  ``@app.route("/login", methods=["POST"])``. (#3907)
 - Support async views, error handlers, before and after request, and
-  teardown functions. 3412
-- Support nesting blueprints. 593, 1548, 3923
+  teardown functions. (#3412)
+- Support nesting blueprints. (#593, 1548), (#3923)
 - Set the default encoding to "UTF-8" when loading ``.env`` and
-  ``.flaskenv`` files to allow to use non-ASCII characters. 3931
+  ``.flaskenv`` files to allow to use non-ASCII characters. (#3931)
 - ``flask shell`` sets up tab and history completion like the default
-  ``python`` shell if ``readline`` is installed. 3941
+  ``python`` shell if ``readline`` is installed. (#3941)
 - ``helpers.total_seconds()`` is deprecated. Use
-  ``timedelta.total_seconds()`` instead. 3962
-- Add type hinting. 3973.
+  ``timedelta.total_seconds()`` instead. (#3962)
+- Add type hinting. (#3973).
 
 ## 1.1.4
 
 Released 2021-05-13
 
 - Update ``static_folder`` to use ``_compat.fspath`` instead of
-  ``os.fspath`` to continue supporting Python < 3.6 4050
+  ``os.fspath`` to continue supporting Python < 3.6 (#4050)
 
 ## 1.1.3
 
 Released 2021-05-13
 
 - Set maximum versions of Werkzeug, Jinja, Click, and ItsDangerous.
-  4043
+  (#4043)
 - Re-add support for passing a ``pathlib.Path`` for ``static_folder``.
-  3579
+  (#3579)
 
 ## 1.1.2
 
 Released 2020-04-03
 
 - Work around an issue when running the ``flask`` command with an
-  external debugger on Windows. 3297
+  external debugger on Windows. (#3297)
 - The static route will not catch all URLs if the ``Flask``
-  ``static_folder`` argument ends with a slash. 3452
+  ``static_folder`` argument ends with a slash. (#3452)
 
 ## 1.1.1
 
@@ -633,7 +633,7 @@ Released 2019-07-08
 
 - The ``flask.json_available`` flag was added back for compatibility
   with some extensions. It will raise a deprecation warning when used,
-  and will be removed in version 2.0.0. 3288
+  and will be removed in version 2.0.0. (#3288)
 
 ## 1.1.0
 
@@ -647,7 +647,7 @@ Released 2019-07-04
   available as ``e.original_exception`` rather than being passed
   directly to the handler. The same is true if the handler is for the
   base ``HTTPException``. This makes error handler behavior more
-  consistent. 3266
+  consistent. (#3266)
 
 - ``Flask.finalize_request`` is called for all unhandled
   exceptions even if there is no ``500`` error handler.
@@ -656,69 +656,69 @@ Released 2019-07-04
   passed as ``Flask(import_name)``. This reverts 1.0's behavior of
   always logging to ``"flask.app"``, in order to support multiple apps
   in the same process. A warning will be shown if old configuration is
-  detected that needs to be moved. 2866
+  detected that needs to be moved. (#2866)
 - ``RequestContext.copy`` includes the current session object in the
   request context copy. This prevents ``session`` pointing to an
-  out-of-date object. 2935
+  out-of-date object. (#2935)
 - Using built-in RequestContext, unprintable Unicode characters in
   Host header will result in a HTTP 400 response and not HTTP 500 as
-  previously. 2994
+  previously. (#2994)
 - ``send_file`` supports ``PathLike`` objects as described in
-  :pep:`519`, to support ``pathlib`` in Python 3. 3059
+  :pep:`519`, to support ``pathlib`` in Python 3. (#3059)
 - ``send_file`` supports ``BytesIO`` partial content.
-  2957
+  (#2957)
 - ``open_resource`` accepts the "rt" file mode. This still does the
-  same thing as "r". 3163
+  same thing as "r". (#3163)
 - The ``MethodView.methods`` attribute set in a base class is used by
-  subclasses. 3138
+  subclasses. (#3138)
 - ``Flask.jinja_options`` is a ``dict`` instead of an
   ``ImmutableDict`` to allow easier configuration. Changes must still
-  be made before creating the environment. 3190
+  be made before creating the environment. (#3190)
 - Flask's ``JSONMixin`` for the request and response wrappers was
   moved into Werkzeug. Use Werkzeug's version with Flask-specific
   support. This bumps the Werkzeug dependency to >= 0.15.
-  3125
+  (#3125)
 - The ``flask`` command entry point is simplified to take advantage
   of Werkzeug 0.15's better reloader support. This bumps the Werkzeug
-  dependency to >= 0.15. 3022
+  dependency to >= 0.15. (#3022)
 - Support ``static_url_path`` that ends with a forward slash.
-  3134
+  (#3134)
 - Support empty ``static_folder`` without requiring setting an empty
-  ``static_url_path`` as well. 3124
-- ``jsonify`` supports ``dataclass`` objects. 3195
+  ``static_url_path`` as well. (#3124)
+- ``jsonify`` supports ``dataclass`` objects. (#3195)
 - Allow customizing the ``Flask.url_map_class`` used for routing.
-  3069
+  (#3069)
 - The development server port can be set to 0, which tells the OS to
-  pick an available port. 2926
+  pick an available port. (#2926)
 - The return value from ``cli.load_dotenv`` is more consistent with
   the documentation. It will return ``False`` if python-dotenv is not
-  installed, or if the given path isn't a file. 2937
+  installed, or if the given path isn't a file. (#2937)
 - Signaling support has a stub for the ``connect_via`` method when
-  the Blinker library is not installed. 3208
+  the Blinker library is not installed. (#3208)
 - Add an ``--extra-files`` option to the ``flask run`` CLI command to
   specify extra files that will trigger the reloader on change.
-  2897
+  (#2897)
 - Allow returning a dictionary from a view function. Similar to how
   returning a string will produce a ``text/html`` response, returning
   a dict will call ``jsonify`` to produce a ``application/json``
-  response. 3111
+  response. (#3111)
 - Blueprints have a ``cli`` Click group like ``app.cli``. CLI commands
   registered with a blueprint will be available as a group under the
-  ``flask`` command. 1357.
+  ``flask`` command. (#1357).
 - When using the test client as a context manager (``with client:``),
   all preserved request contexts are popped when the block exits,
-  ensuring nested contexts are cleaned up correctly. 3157
+  ensuring nested contexts are cleaned up correctly. (#3157)
 - Show a better error message when the view return type is not
-  supported. 3214
+  supported. (#3214)
 - ``flask.testing.make_test_environ_builder()`` has been deprecated in
-  favour of a new class ``flask.testing.EnvironBuilder``. 3232
+  favour of a new class ``flask.testing.EnvironBuilder``. (#3232)
 - The ``flask run`` command no longer fails if Python is not built
   with SSL support. Using the ``--cert`` option will show an
-  appropriate error message. 3211
+  appropriate error message. (#3211)
 - URL matching now occurs after the request context is pushed, rather
   than when it's created. This allows custom URL converters to access
   the app and request contexts, such as to query a database for an id.
-  3088
+  (#3088)
 
 ## 1.0.4
 
@@ -726,11 +726,11 @@ Released 2019-07-04
 
 - The key information for ``BadRequestKeyError`` is no longer cleared
   outside debug mode, so error handlers can still access it. This
-  requires upgrading to Werkzeug 0.15.5. 3249
+  requires upgrading to Werkzeug 0.15.5. (#3249)
 - ``send_file`` url quotes the ":" and "/" characters for more
-  compatible UTF-8 filename support in some browsers. 3074
-- Fixes for :pep:`451` import loaders and pytest 5.x. 3275
-- Show message about dotenv on stderr instead of stdout. 3285
+  compatible UTF-8 filename support in some browsers. (#3074)
+- Fixes for :pep:`451` import loaders and pytest 5.x. (#3275)
+- Show message about dotenv on stderr instead of stdout. (#3285)
 
 ## 1.0.3
 
@@ -738,46 +738,46 @@ Released 2019-05-17
 
 - ``send_file`` encodes filenames as ASCII instead of Latin-1
   (ISO-8859-1). This fixes compatibility with Gunicorn, which is
-  stricter about header encodings than :pep:`3333`. 2766
+  stricter about header encodings than :pep:`3333`. (#2766)
 - Allow custom CLIs using ``FlaskGroup`` to set the debug flag without
   it always being overwritten based on environment variables.
-  2765
+  (#2765)
 - ``flask --version`` outputs Werkzeug's version and simplifies the
-  Python version. 2825
+  Python version. (#2825)
 - ``send_file`` handles an ``attachment_filename`` that is a native
-  Python 2 string (bytes) with UTF-8 coded bytes. 2933
+  Python 2 string (bytes) with UTF-8 coded bytes. (#2933)
 - A catch-all error handler registered for ``HTTPException`` will not
   handle ``RoutingException``, which is used internally during
   routing. This fixes the unexpected behavior that had been introduced
-  in 1.0. 2986
+  in 1.0. (#2986)
 - Passing the ``json`` argument to ``app.test_client`` does not
-  push/pop an extra app context. 2900
+  push/pop an extra app context. (#2900)
 
 ## 1.0.2
 
 Released 2018-05-02
 
 - Fix more backwards compatibility issues with merging slashes between
-  a blueprint prefix and route. 2748
+  a blueprint prefix and route. (#2748)
 - Fix error with ``flask routes`` command when there are no routes.
-  2751
+  (#2751)
 
 ## 1.0.1
 
 Released 2018-04-29
 
 - Fix registering partials (with no ``__name__``) as view functions.
-  2730
+  (#2730)
 - Don't treat lists returned from view functions the same as tuples.
-  Only tuples are interpreted as response data. 2736
+  Only tuples are interpreted as response data. (#2736)
 - Extra slashes between a blueprint's ``url_prefix`` and a route URL
   are merged. This fixes some backwards compatibility issues with the
-  change in 1.0. 2731, 2742
+  change in 1.0. (#2731), (#2742)
 - Only trap ``BadRequestKeyError`` errors in debug mode, not all
   ``BadRequest`` errors. This allows ``abort(400)`` to continue
-  working as expected. 2735
+  working as expected. (#2735)
 - The ``FLASK_SKIP_DOTENV`` environment variable can be set to ``1``
-  to skip automatically loading dotenv files. 2722
+  to skip automatically loading dotenv files. (#2722)
 
 
 Version 1.0
@@ -788,89 +788,89 @@ Released 2018-04-26
 - Python 2.6 and 3.3 are no longer supported.
 - Bump minimum dependency versions to the latest stable versions:
   Werkzeug >= 0.14, Jinja >= 2.10, itsdangerous >= 0.24, Click >= 5.1.
-  2586
+  (#2586)
 - Skip ``app.run`` when a Flask application is run from the command
   line. This avoids some behavior that was confusing to debug.
 - Change the default for ``JSONIFY_PRETTYPRINT_REGULAR`` to
   ``False``. ``~json.jsonify`` returns a compact format by default,
-  and an indented format in debug mode. 2193
+  and an indented format in debug mode. (#2193)
 - ``Flask.__init__`` accepts the ``host_matching`` argument and sets
-  it on ``Flask.url_map``. 1559
+  it on ``Flask.url_map``. (#1559)
 - ``Flask.__init__`` accepts the ``static_host`` argument and passes
   it as the ``host`` argument when defining the static route.
-  1559
+  (#1559)
 - ``send_file`` supports Unicode in ``attachment_filename``.
-  2223
+  (#2223)
 - Pass ``_scheme`` argument from ``url_for`` to
-  ``Flask.handle_url_build_error``. 2017
+  ``Flask.handle_url_build_error``. (#2017)
 - ``Flask.add_url_rule`` accepts the ``provide_automatic_options``
-  argument to disable adding the ``OPTIONS`` method. 1489
+  argument to disable adding the ``OPTIONS`` method. (#1489)
 - ``MethodView`` subclasses inherit method handlers from base classes.
-  1936
+  (#1936)
 - Errors caused while opening the session at the beginning of the
-  request are handled by the app's error handlers. 2254
+  request are handled by the app's error handlers. (#2254)
 - Blueprints gained ``Blueprint.json_encoder`` and
   ``Blueprint.json_decoder`` attributes to override the app's
-  encoder and decoder. 1898
+  encoder and decoder. (#1898)
 - ``Flask.make_response`` raises ``TypeError`` instead of
   ``ValueError`` for bad response types. The error messages have been
-  improved to describe why the type is invalid. 2256
+  improved to describe why the type is invalid. (#2256)
 - Add ``routes`` CLI command to output routes registered on the
-  application. 2259
+  application. (#2259)
 - Show warning when session cookie domain is a bare hostname or an IP
   address, as these may not behave properly in some browsers, such as
-  Chrome. 2282
-- Allow IP address as exact session cookie domain. 2282
+  Chrome. (#2282)
+- Allow IP address as exact session cookie domain. (#2282)
 - ``SESSION_COOKIE_DOMAIN`` is set if it is detected through
-  ``SERVER_NAME``. 2282
+  ``SERVER_NAME``. (#2282)
 - Auto-detect zero-argument app factory called ``create_app`` or
-  ``make_app`` from ``FLASK_APP``. 2297
+  ``make_app`` from ``FLASK_APP``. (#2297)
 - Factory functions are not required to take a ``script_info``
   parameter to work with the ``flask`` command. If they take a single
   parameter or a parameter named ``script_info``, the ``ScriptInfo``
-  object will be passed. 2319
+  object will be passed. (#2319)
 - ``FLASK_APP`` can be set to an app factory, with arguments if
   needed, for example ``FLASK_APP=myproject.app:create_app('dev')``.
-  2326
+  (#2326)
 - ``FLASK_APP`` can point to local packages that are not installed in
   editable mode, although ``pip install -e`` is still preferred.
-  2414
+  (#2414)
 - The ``View`` class attribute
   ``View.provide_automatic_options`` is set in ``View.as_view``, to be
-  detected by ``Flask.add_url_rule``. 2316
+  detected by ``Flask.add_url_rule``. (#2316)
 - Error handling will try handlers registered for ``blueprint, code``,
   ``app, code``, ``blueprint, exception``, ``app, exception``.
-  2314
+  (#2314)
 - ``Cookie`` is added to the response's ``Vary`` header if the session
-  is accessed at all during the request (and not deleted). 2288
+  is accessed at all during the request (and not deleted). (#2288)
 - ``Flask.test_request_context`` accepts ``subdomain`` and
   ``url_scheme`` arguments for use when building the base URL.
-  1621
+  (#1621)
 - Set ``APPLICATION_ROOT`` to ``'/'`` by default. This was already the
   implicit default when it was set to ``None``.
 - ``TRAP_BAD_REQUEST_ERRORS`` is enabled by default in debug mode.
   ``BadRequestKeyError`` has a message with the bad key in debug mode
-  instead of the generic bad request message. 2348
+  instead of the generic bad request message. (#2348)
 - Allow registering new tags with ``TaggedJSONSerializer`` to support
-  storing other types in the session cookie. 2352
+  storing other types in the session cookie. (#2352)
 - Only open the session if the request has not been pushed onto the
   context stack yet. This allows ``stream_with_context`` generators to
-  access the same session that the containing view uses. 2354
+  access the same session that the containing view uses. (#2354)
 - Add ``json`` keyword argument for the test client request methods.
   This will dump the given object as JSON and set the appropriate
-  content type. 2358
+  content type. (#2358)
 - Extract JSON handling to a mixin applied to both the ``Request`` and
   ``Response`` classes. This adds the ``Response.is_json`` and
   ``Response.get_json`` methods to the response to make testing JSON
-  response much easier. 2358
+  response much easier. (#2358)
 - Removed error handler caching because it caused unexpected results
   for some exception inheritance hierarchies. Register handlers
   explicitly for each exception if you want to avoid traversing the
-  MRO. 2362
-- Fix incorrect JSON encoding of aware, non-UTC datetimes. 2374
+  MRO. (#2362)
+- Fix incorrect JSON encoding of aware, non-UTC datetimes. (#2374)
 - Template auto reloading will honor debug mode even if
-  ``Flask.jinja_env`` was already accessed. 2373
-- The following old deprecated code was removed. 2385
+  ``Flask.jinja_env`` was already accessed. (#2373)
+- The following old deprecated code was removed. (#2385)
 
 - ``flask.ext`` - import extensions directly by their name instead
   of through the ``flask.ext`` namespace. For example,
@@ -886,64 +886,64 @@ Released 2018-04-26
 - ``Flask.static_path`` - use ``Flask.static_url_path`` instead.
 - ``Request.module`` - use ``Request.blueprint`` instead.
 
-- The ``Request.json`` property is no longer deprecated. 1421
+- The ``Request.json`` property is no longer deprecated. (#1421)
 - Support passing a ``EnvironBuilder`` or ``dict`` to
-  ``test_client.open``. 2412
+  ``test_client.open``. (#2412)
 - The ``flask`` command and ``Flask.run`` will load environment
   variables from ``.env`` and ``.flaskenv`` files if python-dotenv is
-  installed. 2416
+  installed. (#2416)
 - When passing a full URL to the test client, the scheme in the URL is
-  used instead of ``PREFERRED_URL_SCHEME``. 2430
+  used instead of ``PREFERRED_URL_SCHEME``. (#2430)
 - ``Flask.logger`` has been simplified. ``LOGGER_NAME`` and
   ``LOGGER_HANDLER_POLICY`` config was removed. The logger is always
   named ``flask.app``. The level is only set on first access, it
   doesn't check ``Flask.debug`` each time. Only one format is used,
   not different ones depending on ``Flask.debug``. No handlers are
   removed, and a handler is only added if no handlers are already
-  configured. 2436
-- Blueprint view function names may not contain dots. 2450
+  configured. (#2436)
+- Blueprint view function names may not contain dots. (#2450)
 - Fix a ``ValueError`` caused by invalid ``Range`` requests in some
-  cases. 2526
-- The development server uses threads by default. 2529
+  cases. (#2526)
+- The development server uses threads by default. (#2529)
 - Loading config files with ``silent=True`` will ignore ``ENOTDIR``
-  errors. 2581
+  errors. (#2581)
 - Pass ``--cert`` and ``--key`` options to ``flask run`` to run the
-  development server over HTTPS. 2606
+  development server over HTTPS. (#2606)
 - Added ``SESSION_COOKIE_SAMESITE`` to control the ``SameSite``
-  attribute on the session cookie. 2607
+  attribute on the session cookie. (#2607)
 - Added ``Flask.test_cli_runner`` to create a Click runner that can
-  invoke Flask CLI commands for testing. 2636
+  invoke Flask CLI commands for testing. (#2636)
 - Subdomain matching is disabled by default and setting
   ``SERVER_NAME`` does not implicitly enable it. It can be enabled by
   passing ``subdomain_matching=True`` to the ``Flask`` constructor.
-  2635
+  (#2635)
 - A single trailing slash is stripped from the blueprint
-  ``url_prefix`` when it is registered with the app. 2629
+  ``url_prefix`` when it is registered with the app. (#2629)
 - ``Request.get_json`` doesn't cache the result if parsing fails when
-  ``silent`` is true. 2651
+  ``silent`` is true. (#2651)
 - ``Request.get_json`` no longer accepts arbitrary encodings. Incoming
   JSON should be encoded using UTF-8 per :rfc:`8259`, but Flask will
-  autodetect UTF-8, -16, or -32. 2691
+  autodetect UTF-8, -16, or -32. (#2691)
 - Added ``MAX_COOKIE_SIZE`` and ``Response.max_cookie_size`` to
   control when Werkzeug warns about large cookies that browsers may
-  ignore. 2693
+  ignore. (#2693)
 - Updated documentation theme to make docs look better in small
-  windows. 2709
+  windows. (#2709)
 - Rewrote the tutorial docs and example project to take a more
   structured approach to help new users avoid common pitfalls.
-  2676
+  (#2676)
 
 ## 0.12.5
 
 Released 2020-02-10
 
-- Pin Werkzeug to < 1.0.0. 3497
+- Pin Werkzeug to < 1.0.0. (#3497)
 
 ## 0.12.4
 
 Released 2018-04-29
 
-- Repackage 0.12.3 to fix package layout issue. 2728
+- Repackage 0.12.3 to fix package layout issue. (#2728)
 
 ## 0.12.3
 
@@ -951,9 +951,9 @@ Released 2018-04-26
 
 - ``Request.get_json`` no longer accepts arbitrary encodings.
   Incoming JSON should be encoded using UTF-8 per :rfc:`8259`, but
-  Flask will autodetect UTF-8, -16, or -32. 2692
+  Flask will autodetect UTF-8, -16, or -32. (#2692)
 - Fix a Python warning about imports when using ``python -m flask``.
-  2666
+  (#2666)
 - Fix a ``ValueError`` caused by invalid ``Range`` requests in some
   cases.
 
@@ -970,9 +970,9 @@ Released 2017-03-31
 - Prevent ``flask run`` from showing a ``NoAppException`` when an
   ``ImportError`` occurs within the imported application module.
 - Fix encoding behavior of ``app.config.from_pyfile`` for Python 3.
-  2118
+  (#2118)
 - Use the ``SERVER_NAME`` config if it is present as default values
-  for ``app.run``. 2109, 2152
+  for ``app.run``. (#2109), (#2152)
 - Call ``ctx.auto_pop`` with the exception object instead of ``None``,
   in the event that a ``BaseException`` such as ``KeyboardInterrupt``
   is raised in a request handler.
@@ -985,27 +985,27 @@ Released 2016-12-21, codename Punsch
 
 - The cli command now responds to ``--version``.
 - Mimetype guessing and ETag generation for file-like objects in
-  ``send_file`` has been removed. 104, :pr`1849`
+  ``send_file`` has been removed. (#104), :pr`1849`
 - Mimetype guessing in ``send_file`` now fails loudly and doesn't fall
-  back to ``application/octet-stream``. 1988
+  back to ``application/octet-stream``. (#1988)
 - Make ``flask.safe_join`` able to join multiple paths like
-  ``os.path.join`` 1730
+  ``os.path.join`` (#1730)
 - Revert a behavior change that made the dev server crash instead of
-  returning an Internal Server Error. 2006
+  returning an Internal Server Error. (#2006)
 - Correctly invoke response handlers for both regular request
   dispatching as well as error handlers.
 - Disable logger propagation by default for the app logger.
 - Add support for range requests in ``send_file``.
 - ``app.test_client`` includes preset default environment, which can
   now be directly set, instead of per ``client.get``.
-- Fix crash when running under PyPy3. 1814
+- Fix crash when running under PyPy3. (#1814)
 
 ## 0.11.1
 
 Released 2016-06-07
 
 - Fixed a bug that prevented ``FLASK_APP=foobar/__init__.py`` from
-  working. 1872
+  working. (#1872)
 
 
 Version 0.11
@@ -1067,23 +1067,23 @@ Released 2016-05-29, codename Absinthe
   space included by default after separators.
 - JSON responses are now terminated with a newline character, because
   it is a convention that UNIX text files end with a newline and some
-  clients don't deal well when this newline is missing. 1262
+  clients don't deal well when this newline is missing. (#1262)
 - The automatically provided ``OPTIONS`` method is now correctly
   disabled if the user registered an overriding rule with the
-  lowercase-version ``options``. 1288
+  lowercase-version ``options``. (#1288)
 - ``flask.json.jsonify`` now supports the ``datetime.date`` type.
-  1326
+  (#1326)
 - Don't leak exception info of already caught exceptions to context
-  teardown handlers. 1393
-- Allow custom Jinja environment subclasses. 1422
+  teardown handlers. (#1393)
+- Allow custom Jinja environment subclasses. (#1422)
 - Updated extension dev guidelines.
 - ``flask.g`` now has ``pop()`` and ``setdefault`` methods.
 - Turn on autoescape for ``flask.templating.render_template_string``
-  by default. 1515
-- ``flask.ext`` is now deprecated. 1484
+  by default. (#1515)
+- ``flask.ext`` is now deprecated. (#1484)
 - ``send_from_directory`` now raises BadRequest if the filename is
-  invalid on the server OS. 1763
-- Added the ``JSONIFY_MIMETYPE`` configuration variable. 1728
+  invalid on the server OS. (#1763)
+- Added the ``JSONIFY_MIMETYPE`` configuration variable. (#1728)
 - Exceptions during teardown handling will no longer leave bad
   application contexts lingering around.
 - Fixed broken ``test_appcontext_signals()`` test case.

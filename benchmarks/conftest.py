@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import io
 
-from flask import Flask, jsonify, render_template_string
+from flask import Flask
+from flask import jsonify
+from flask import render_template_string
 
 TEMPLATE = """\
 <!doctype html>
@@ -43,9 +45,7 @@ def make_app() -> tuple[Flask, Flask, Flask]:
 
     @template_app.get("/page")
     def page() -> str:
-        return render_template_string(
-            TEMPLATE, title="bench", items=range(10)
-        )
+        return render_template_string(TEMPLATE, title="bench", items=range(10))
 
     return hello_app, api_app, template_app
 

@@ -1,7 +1,15 @@
 import pytest
 
 from observability_example import create_app, setup_telemetry
-from opentelemetry.sdk.trace.export import InMemorySpanExporter
+
+# InMemorySpanExporter moved between submodules across OTel SDK versions; try
+# both so the example works on the locked range and on newer installs.
+try:
+    from opentelemetry.sdk.trace.export import InMemorySpanExporter
+except ImportError:  # OTel SDK >= ~1.30
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+        InMemorySpanExporter,
+    )
 
 
 @pytest.fixture(name="app")
@@ -45,11 +53,6 @@ def test_error_is_marked(client, span_exporter):
 def test_console_path_does_not_crash(monkeypatch):
     """Without OTEL_EXPORTER_OTLP_ENDPOINT, the console exporter path runs."""
     monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
-    import importlib
-
-    import observability_example.telemetry as tel
-
-    importlib.reload(tel)
     app = create_app()
     setup_telemetry(app)  # no span_exporter -> console exporters
     response = app.test_client().get("/api")

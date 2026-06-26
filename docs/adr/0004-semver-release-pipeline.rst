@@ -36,11 +36,23 @@ Decision
    the advisory lint applies to future commits.
 
 #. **A new ``.github/workflows/release.yaml``** (``workflow_dispatch``,
-   ``dry_run: true`` by default) runs ``changes.py bump``, and on
-   ``--apply`` commits the bump, tags ``vX.Y.Z``, and pushes. The tag push
-   triggers the *existing* ``publish.yaml`` -- which is not modified. A
-   separate ``attach-notes`` job sets the GitHub release body from
-   ``release_notes.py``.
+   ``dry_run: true`` by default) makes the release as **two commits** so the
+   tag points at a *clean-version* commit:
+
+   - ``changes.py bump --apply`` (release-prep): sets ``pyproject.toml``
+     ``version = "X.Y.Z"`` (clean, no ``.dev``) and renames the head
+     ``Unreleased`` -> ``Released <date>``. The commit "Release X.Y.Z" is
+     **tagged** ``vX.Y.Z``. ``uv build`` on this commit produces
+     ``Flask-X.Y.Z`` (verified: building with ``version = "3.2.0"`` yields
+     ``flask-3.2.0`` artifacts), *not* the next dev.
+   - ``changes.py start-dev --next-dev X.Y.(Z+1).dev --apply``: reopens
+     development on a **separate post-tag commit** (``pyproject`` ->
+     ``X.Y.(Z+1).dev``, new ``Unreleased`` block). Pushed to ``main`` after
+     the tag, so the tag still points at the clean-version commit.
+
+   The tag push triggers the *existing* ``publish.yaml`` -- which is not
+   modified. A separate ``attach-notes`` job sets the GitHub release body
+   from ``release_notes.py``.
 
 #. **The PyPI hard gate is the existing ``environment: publish`` approval**
    on ``publish.yaml``. The release workflow never publishes directly; the

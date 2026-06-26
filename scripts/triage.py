@@ -117,10 +117,13 @@ def git_last_change(repo_root: Path, path: str) -> str:
     try:
         out = subprocess.run(
             [
-                "git", "log", "-1",
+                "git",
+                "log",
+                "-1",
                 "--format=%h · %an <%ae> · %ad",
                 "--date=short",
-                "--", path,
+                "--",
+                path,
             ],
             cwd=repo_root,
             capture_output=True,

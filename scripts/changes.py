@@ -178,10 +178,8 @@ def rename_unreleased_to_released(changes_text: str, released: str) -> str:
         # already released; idempotent no-op
         return changes_text
     today = date.today().isoformat()
-    replacement = (
-        f"{m.group(1)}\n{m.group(3)}\n\nReleased {today}\n"
-    )
-    return changes_text[: m.start()] + replacement + changes_text[m.end():]
+    replacement = f"{m.group(1)}\n{m.group(3)}\n\nReleased {today}\n"
+    return changes_text[: m.start()] + replacement + changes_text[m.end() :]
 
 
 def prepend_next_dev_block(changes_text: str, next_dev: str) -> str:
@@ -245,11 +243,19 @@ def rst_to_markdown_changes(changes_text: str) -> str:
     return "\n".join(out).rstrip() + "\n"
 
 
-_ROLE_RE = re.compile(r":(?:pr|issue|ghsa):`([^`]+)`")
+_ROLE_RE = re.compile(r":(pr|issue|ghsa):`([^`]+)`")
 
 
 def _flatten_roles(line: str) -> str:
-    return _ROLE_RE.sub(r"\1", line)
+    """Render reST ``:pr:`/`:issue:`/`:ghsa:` roles as readable markdown."""
+
+    def repl(match: re.Match) -> str:
+        role, ref = match.group(1), match.group(2)
+        if role in ("pr", "issue"):
+            return f"(#{ref})"
+        return f"[security advisory {ref}]"
+
+    return _ROLE_RE.sub(repl, line)
 
 
 # --------------------------------------------------------------------------- #
@@ -292,6 +298,15 @@ def _write_github_vars(*, version, new_version, next_dev_version, bump_level):
 
 
 def cmd_bump(args: argparse.Namespace) -> int:
+    """Step 1 of 2: prepare the *tagged release commit*.
+
+    Sets ``pyproject.toml`` to the **clean** released version (``3.2.0``,
+    not ``3.2.0.dev``) and renames the head ``Unreleased`` line to
+    ``Released <date>``. This is the commit the tag ``vX.Y.Z`` points at, so
+    ``uv build`` (in publish.yaml) produces ``Flask-X.Y.Z`` -- not the next
+    dev. The next-dev bump is a *separate post-tag commit* (``start-dev``),
+    so the tag never points at a tree whose pyproject already says next-dev.
+    """
     dev = current_version()
     released = release_version(dev)
     level = args.level if args.level != "auto" else detect_level()
@@ -299,23 +314,9 @@ def cmd_bump(args: argparse.Namespace) -> int:
 
     changes_text = CHANGES_RST.read_text()
     new_changes = rename_unreleased_to_released(changes_text, released)
-    new_changes = prepend_next_dev_block(new_changes, next_dev)
     new_changelog = rst_to_markdown_changes(new_changes)
 
-    summary = (
-        f"release plan:\n"
-        f"  current dev version : {dev}\n"
-        f"  releasing           : {released}  (level={level})\n"
-        f"  next dev version    : {next_dev}\n"
-        f"  CHANGES.rst         : Unreleased -> Released {date.today().isoformat()}, "
-        f"prepend Version {DEV_SUFFIX_RE.sub('', next_dev)} block\n"
-        f"  CHANGELOG.md        : regenerated ({len(new_changelog)} bytes)\n"
-    )
-
     if args.github_output:
-        # Surface the result to the release workflow: ``version`` becomes a
-        # step output (job ``outputs.version``); ``NEW_VERSION`` etc. become
-        # env vars for the subsequent commit/tag/push step.
         _write_github_vars(
             version=released,
             new_version=released,
@@ -323,20 +324,67 @@ def cmd_bump(args: argparse.Namespace) -> int:
             bump_level=level,
         )
 
-    print(summary)
+    today = date.today().isoformat()
+    print(
+        "release plan (step 1 of 2 -- the tagged release commit):\n"
+        f"  current dev version : {dev}\n"
+        f"  releasing           : {released}  (clean, no .dev)\n"
+        f'  pyproject.toml      : version -> "{released}"\n'
+        f"  CHANGES.rst         : Unreleased -> Released {today}\n"
+        f"  CHANGELOG.md        : regenerated ({len(new_changelog)} bytes)\n"
+        f"  next (step 2)       : start-dev --next-dev {next_dev}\n"
+        f"                        (separate post-tag commit, NOT tagged)\n"
+    )
 
     if args.dry_run:
-        print("--- CHANGES.rst diff (head) ---")
-        _print_head_diff(changes_text, new_changes)
-        print("--- CHANGELOG.md preview (head) ---")
-        print("\n".join(new_changelog.splitlines()[:40]))
+        print("--- CHANGES.rst head (after) ---")
+        print("\n".join(new_changes.splitlines()[:8]))
         return 0
 
-    # --apply
+    CHANGES_RST.write_text(new_changes)
+    set_pyproject_version(released)
+    CHANGELOG_MD.write_text(new_changelog)
+    print(
+        f"applied step 1: pyproject version -> {released} (clean). "
+        f"Commit 'Release {released}' and tag v{released} on THIS commit."
+    )
+    return 0
+
+
+def cmd_start_dev(args: argparse.Namespace) -> int:
+    """Step 2 of 2: the *post-tag* commit that reopens development.
+
+    Sets ``pyproject.toml`` to the next dev (``X.Y.(Z+1).dev``) and prepends
+    a fresh ``Version X.Y.(Z+1) / Unreleased`` block to ``CHANGES.rst``. Run
+    this AFTER tagging ``vX.Y.Z`` so the tag still points at the clean-version
+    commit. Push this commit to ``main`` alongside the tag.
+    """
+    next_dev = args.next_dev
+    next_release = release_version(next_dev)
+
+    changes_text = CHANGES_RST.read_text()
+    new_changes = prepend_next_dev_block(changes_text, next_dev)
+    new_changelog = rst_to_markdown_changes(new_changes)
+
+    print(
+        "start-dev plan (step 2 of 2 -- post-tag commit):\n"
+        f"  pyproject.toml : version -> {next_dev}\n"
+        f"  CHANGES.rst    : prepend Version {next_release} / Unreleased block\n"
+        f"  CHANGELOG.md   : regenerated ({len(new_changelog)} bytes)\n"
+    )
+
+    if args.dry_run:
+        print("--- CHANGES.rst head (after) ---")
+        print("\n".join(new_changes.splitlines()[:8]))
+        return 0
+
     CHANGES_RST.write_text(new_changes)
     set_pyproject_version(next_dev)
     CHANGELOG_MD.write_text(new_changelog)
-    print(f"applied: released {released}, set pyproject version -> {next_dev}")
+    print(
+        f"applied step 2: pyproject version -> {next_dev}. "
+        f"Commit 'Start {next_dev}' on main AFTER the tag."
+    )
     return 0
 
 
@@ -365,18 +413,14 @@ def _extract_version_section(md: str, version: str) -> str | None:
     return m.group(0) if m else None
 
 
-def _print_head_diff(before: str, after: str) -> None:
-    before_head = "\n".join(before.splitlines()[:8])
-    after_head = "\n".join(after.splitlines()[:12])
-    print("before:\n" + before_head)
-    print("after:\n" + after_head)
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    p_bump = sub.add_parser("bump", help="bump version + edit CHANGES.rst")
+    p_bump = sub.add_parser(
+        "bump",
+        help="step 1: prepare the tagged release commit (clean version)",
+    )
     levels = ["auto", "major", "minor", "patch"]
     p_bump.add_argument("--level", choices=levels, default="auto")
     group = p_bump.add_mutually_exclusive_group()
@@ -387,6 +431,18 @@ def main() -> int:
     )
     p_bump.set_defaults(func=cmd_bump)
 
+    p_start = sub.add_parser(
+        "start-dev",
+        help="step 2: post-tag commit reopening development (next .dev)",
+    )
+    p_start.add_argument(
+        "--next-dev", required=True, help="next dev version, e.g. 3.2.1.dev"
+    )
+    sgroup = p_start.add_mutually_exclusive_group()
+    sgroup.add_argument("--dry-run", action="store_true", help="print plan only")
+    sgroup.add_argument("--apply", action="store_true", help="write in place")
+    p_start.set_defaults(func=cmd_start_dev)
+
     p_notes = sub.add_parser("notes", help="extract a version's release notes")
     p_notes.add_argument("--version", required=True)
     p_notes.set_defaults(func=cmd_notes)
@@ -395,8 +451,8 @@ def main() -> int:
     p_mirror.set_defaults(func=cmd_mirror)
 
     args = parser.parse_args()
-    if args.cmd == "bump" and not args.apply and not args.dry_run:
-        # default to dry-run if neither flag given (safe)
+    # default to dry-run if neither flag given (safe) for the mutating cmds
+    if args.cmd in ("bump", "start-dev") and not args.apply and not args.dry_run:
         args.dry_run = True
     return args.func(args)
 

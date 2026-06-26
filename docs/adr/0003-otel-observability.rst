@@ -42,9 +42,9 @@ Decision
 
 #. **The example demonstrates every seam:** ``FlaskInstrumentor`` wraps
    ``app.wsgi_app`` for auto spans/metrics; signal subscribers add custom
-  attributes and an error counter; ``before_request`` / ``after_request``
-  emit per-request logs and a custom duration histogram; an OTel logging
-  handler attaches ``trace_id`` / ``span_id`` to ``app.logger`` records.
+   attributes and an error counter; ``before_request`` / ``after_request``
+   emit per-request logs and a custom duration histogram; an OTel logging
+   handler attaches ``trace_id`` / ``span_id`` to ``app.logger`` records.
 
 #. **A ``docker-compose.yml`` provides the full e2e stack** -- otel-collector
    (receives OTLP), Jaeger (traces UI), Prometheus (metrics), Grafana

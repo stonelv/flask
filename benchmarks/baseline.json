@@ -4,13 +4,30 @@
   "created": "2026-06-23",
   "notes": "Reference medians from in-process test-client micro-benchmarks (gc disabled, median of 200 iterations). Recalibrate with `python benchmarks/perf_check.py --update-baseline` after a representative change. Values are intentionally conservative; the gate compares ratios, not absolutes.",
   "thresholds": {
-    "hard_regression": ["core_request_roundtrip"],
+    "hard_regression": [
+      "core_request_roundtrip"
+    ],
     "advisory_regression_ratio": 1.15,
     "hard_regression_ratio": 1.25
   },
   "benchmarks": {
-    "core_request_roundtrip": {"median_us": 60.0, "min_us": 50.0, "stdev_us": 8.0, "iterations": 200},
-    "routing_match": {"median_us": 8.0, "min_us": 6.0, "stdev_us": 1.5, "iterations": 200},
-    "template_render": {"median_us": 25.0, "min_us": 20.0, "stdev_us": 4.0, "iterations": 200}
+    "core_request_roundtrip": {
+      "median_us": 54.28125223261304,
+      "min_us": 47.49999789055437,
+      "stdev_us": 4.446819655844712,
+      "iterations": 200.0
+    },
+    "routing_match": {
+      "median_us": 2.4170003598555923,
+      "min_us": 2.0840016077272594,
+      "stdev_us": 0.04974664939252446,
+      "iterations": 200.0
+    },
+    "template_render": {
+      "median_us": 172.89575043832883,
+      "min_us": 155.33400437561795,
+      "stdev_us": 0.7085815757439553,
+      "iterations": 200.0
+    }
   }
 }

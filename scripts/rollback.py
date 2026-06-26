@@ -52,12 +52,16 @@ def runbook(version: str, commit: str | None, has_token: bool) -> str:
         f"- Web UI: https://pypi.org/manage/project/flask/release/{version}/yank/",
     ]
     if has_token:
-        lines.append(f"- API: ``scripts/rollback.py --version {version} --yank`` "
-                     "(uses PYPI_API_TOKEN)")
+        lines.append(
+            f"- API: ``scripts/rollback.py --version {version} --yank`` "
+            "(uses PYPI_API_TOKEN)"
+        )
     else:
-        lines.append("- API: set PYPI_API_TOKEN and re-run with ``--yank`` "
-                     "(trusted publishing cannot yank; a long-lived token or the "
-                     "web UI is required).")
+        lines.append(
+            "- API: set PYPI_API_TOKEN and re-run with ``--yank`` "
+            "(trusted publishing cannot yank; a long-lived token or the "
+            "web UI is required)."
+        )
     lines += [
         "",
         "## 2. Revert the release commit",
@@ -70,28 +74,38 @@ def runbook(version: str, commit: str | None, has_token: bool) -> str:
         lines.append("If it was a plain commit:")
         lines.append(f"    git revert {commit}")
     else:
-        lines.append(f"Tag ``v{version}`` not found locally; locate the release "
-                     "commit with ``git log -- v{version}`` and revert it.")
+        lines.append(
+            f"Tag ``v{version}`` not found locally; locate the release "
+            f"commit with ``git log -- v{version}`` and revert it."
+        )
 
     next_patch = _next_patch(version)
+    next_next_dev = _next_patch(next_patch) + ".dev"
     lines += [
         "",
         "## 3. Republish a patch release on the revert branch",
         "",
-        "On the branch containing the revert:",
+        "On the branch containing the revert, run the two-phase release pipeline",
+        "(so the tag points at a clean-version commit, not the next .dev):",
         "",
-        f"    python scripts/changes.py bump --level patch --apply",
-        "    git commit -am 'Release " + next_patch + " (rollback of " + version + ")'",
+        "    python scripts/changes.py bump --level patch --apply",
+        f"    #   release-prep: version -> {next_patch} (clean, tagged)",
+        f"    git commit -am 'Release {next_patch} (rollback of {version})'",
         f"    git tag v{next_patch}",
-        "    git push origin <branch> v" + next_patch,
+        f"    python scripts/changes.py start-dev --next-dev {next_next_dev} --apply",
+        f"    git commit -am 'Start {next_next_dev} dev'",
+        f"    git push origin <branch> v{next_patch}",
         "",
         "The tag push triggers ``.github/workflows/publish.yaml``; the "
         "``environment: publish`` approval gate is the hard stop before PyPI.",
         "",
         "## 4. Communicate",
         "",
-        "- Edit the GitHub release notes for ``v" + version + "`` to point to ``v"
-        + next_patch + "``.",
+        "- Edit the GitHub release notes for ``v"
+        + version
+        + "`` to point to ``v"
+        + next_patch
+        + "``.",
         "- Open a security/ops advisory if the release shipped a correctness "
         "or security bug.",
     ]
@@ -113,6 +127,7 @@ def do_yank(version: str, token: str) -> None:
     """Yank all files for ``version`` via the PyPI JSON API + token."""
     import json
     import urllib.request
+
     url = f"https://pypi.org/pypi/flask/{version}/json"
     with urllib.request.urlopen(url) as resp:  # noqa: S310 (trusted https URL)
         data = json.load(resp)
@@ -143,6 +158,7 @@ def main() -> int:
     args = parser.parse_args()
 
     import os
+
     token = os.environ.get("PYPI_API_TOKEN", "")
     commit = release_commit(args.version)
 
@@ -155,9 +171,11 @@ def main() -> int:
     if args.apply and commit:
         do_local_revert(commit)
     elif args.apply and not commit:
-        print(f"no tag v{args.version} found; cannot auto-revert. "
-              "Run `git fetch --tags` or locate the release commit manually.",
-              file=sys.stderr)
+        print(
+            f"no tag v{args.version} found; cannot auto-revert. "
+            "Run `git fetch --tags` or locate the release commit manually.",
+            file=sys.stderr,
+        )
 
     print(runbook(args.version, commit, has_token=bool(token)))
     return 0

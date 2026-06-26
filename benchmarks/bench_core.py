@@ -75,9 +75,11 @@ def bench_templating() -> dict[str, float]:
     app_ctx = template_app.app_context()
     app_ctx.push()
     try:
-        return measure(lambda: template_app.jinja_env.from_string(
-            "{% for i in range(10) %}{{ i }}{% endfor %}"
-        ).render())
+        return measure(
+            lambda: template_app.jinja_env.from_string(
+                "{% for i in range(10) %}{{ i }}{% endfor %}"
+            ).render()
+        )
     finally:
         app_ctx.pop()
 

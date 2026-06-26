@@ -44,10 +44,28 @@ def load_baseline() -> dict:
     return json.loads(BASELINE_PATH.read_text())
 
 
-def run_all() -> dict[str, dict[str, float]]:
+def run_all(samples: int = 1) -> dict[str, dict[str, float]]:
+    """Run every benchmark ``samples`` times and aggregate.
+
+    With ``samples > 1`` the baseline median is the median of the per-run
+    medians (robust to a single noisy run), min is the best per-run median,
+    and stdev is the spread across runs. This is what ``--update-baseline
+    --samples N`` writes -- a real multi-sample baseline, not one hot run.
+    """
+    import statistics
+
     results: dict[str, dict[str, float]] = {}
     for name, fn in BENCHMARKS.items():
-        results[name] = fn()
+        runs = [fn() for _ in range(max(1, samples))]
+        medians = [r["median_us"] for r in runs]
+        results[name] = {
+            "median_us": statistics.median(medians),
+            "min_us": min(r["min_us"] for r in runs),
+            "stdev_us": (
+                statistics.stdev(medians) if len(medians) > 1 else runs[0]["stdev_us"]
+            ),
+            "iterations": runs[0]["iterations"],
+        }
     return results
 
 
@@ -66,9 +84,7 @@ def build_report(
         f"mode={'advisory' if advisory else 'blocking'}"
     )
     lines.append("")
-    lines.append(
-        "| benchmark | baseline (us) | current (us) | ratio | status |"
-    )
+    lines.append("| benchmark | baseline (us) | current (us) | ratio | status |")
     lines.append("|---|---|---|---|---|")
 
     exit_code = 0
@@ -120,19 +136,26 @@ def main() -> int:
         action="store_true",
         help="Rewrite baseline.json from the current run. Manual only.",
     )
+    parser.add_argument(
+        "--samples",
+        type=int,
+        default=1,
+        help="Number of sampled runs per benchmark (use with --update-baseline "
+        "for a real multi-sample baseline; median of per-run medians).",
+    )
     args = parser.parse_args()
 
     if args.update_baseline:
         baseline = load_baseline()
-        results = run_all()
+        results = run_all(samples=args.samples)
         for name, stats in results.items():
             baseline["benchmarks"][name].update(stats)
         BASELINE_PATH.write_text(json.dumps(baseline, indent=2) + "\n")
-        print(f"Updated {BASELINE_PATH}")
+        print(f"Updated {BASELINE_PATH} (samples={args.samples} per benchmark)")
         return 0
 
     baseline = load_baseline()
-    results = run_all()
+    results = run_all(samples=args.samples)
     report, exit_code = build_report(baseline, results, advisory=args.advisory)
     print(report)
     return exit_code

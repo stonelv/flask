@@ -42,8 +42,17 @@ All additions are additive -- nothing is removed or renamed::
     CHANGELOG.md                         # NEW: derived mirror, generated on release
     pyproject.toml                       # EDITED: markers, tox envs, ruff.src, sdist.include
 
-Unchanged: ``src/flask/**``, ``tests/test_*.py``, ``CHANGES.rst`` (format),
-``uv.lock``, the existing examples, ``publish.yaml``, ``docs/Makefile``.
+Unchanged (no public API behavior change): ``tests/test_*.py``,
+``CHANGES.rst`` (format), ``uv.lock`` (proven in sync by the ``uv-lock``
+pre-commit hook), the existing examples, ``publish.yaml``, ``docs/Makefile``.
+
+One necessary ``src/flask`` fix: ``src/flask/cli.py`` hoists ``import ssl``
+to runtime (it was under ``if TYPE_CHECKING``, but the base-class subscript
+``click.ParamType[... ssl.SSLContext]`` at line 780 evaluates ``ssl`` at
+runtime). With the locked ``click==8.4.0`` this made ``import flask`` fail
+with ``NameError``. The fix changes no public API behavior (only makes
+``import flask`` succeed); it was required to run the smoke/perf/typing gates
+at all. ``mypy --strict`` and the full suite (491 tests) pass with it.
 
 
 Risk list
@@ -67,13 +76,20 @@ Risk list
    prose with no ``:ref:`` labels. ``tox run -e docs`` is a gate.
 
 #. **Performance-gate flakiness** -- CI runner jitter. Mitigated: in-process
-   timing, ``gc.disable()``, median of 200 iterations, **advisory in Phase 1**;
-   promoted to a hard gate only after recalibrating the baseline across
-   >= 10 CI runs.
+   timing, ``gc.disable()``, median of 200 iterations, and a **real
+   multi-sample baseline** (``perf_check.py --samples 10 --update-baseline``,
+   median of per-run medians). The gate is **configurable** via the repo
+   variable ``PERF_GATE_MODE`` (``advisory`` default = warn only, exit 0;
+   ``hard`` = ``--no-advisory``, hard regressions exit 1). Promote to ``hard``
+   only after recalibrating across >= 10 CI runs.
 
 #. **Auto-tag triggers PyPI publication** -- pushing ``vX.Y.Z`` runs
    ``publish.yaml``. Mitigated: ``release.yaml`` defaults to ``dry_run: true``;
-   the existing ``environment: publish`` approval is the hard gate;
+   the release is **two commits** (release-prep sets the *clean* version and
+   is tagged; ``start-dev`` reopens dev on a separate post-tag commit), so the
+   tag points at a clean-version commit and ``uv build`` ships the right
+   version (verified: ``version="3.2.0"`` -> ``flask-3.2.0`` artifacts); the
+   existing ``environment: publish`` approval is the PyPI hard gate;
    ``publish.yaml`` is not modified; ``scripts/rollback.py`` documents
    yank/revert/republish.
 

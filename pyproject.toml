@@ -207,7 +207,10 @@ commands = [[
 
 [tool.tox.env.perf]
 description = "in-process performance micro-benchmarks compared to committed baseline"
-commands = [["python", "benchmarks/perf_check.py"]]
+commands = [[
+    "python", "benchmarks/perf_check.py",
+    {replace = "posargs", default = [], extend = true},
+]]
 
 [tool.tox.env.tests-min]
 description = "pytest on minimum dependency versions"

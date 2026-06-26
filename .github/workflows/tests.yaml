@@ -93,9 +93,11 @@ jobs:
           path: ./.mypy_cache
           key: mypy|${{ hashFiles('pyproject.toml') }}
       - run: uv run --locked --no-default-groups --group dev tox run -e typing
-  # Performance regression gate (advisory in Phase 1/2). Posts the comparison
-  # table to the run summary; exit 0 so runner jitter never blocks a PR.
-  # Promoted to a hard gate in a later phase (see docs/adr/0002).
+  # Performance regression gate. Mode is configurable via the repo variable
+  # PERF_GATE_MODE: 'advisory' (default; regressions warn only, exit 0) or
+  # 'hard' (hard regressions fail the build via --no-advisory). Promote to
+  # hard only after recalibrating baseline.json across >= 10 CI runs
+  # (see docs/adr/0002 + benchmarks/README.rst).
   perf:
     needs: [smoke]
     runs-on: ubuntu-latest
@@ -110,8 +112,30 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version-file: pyproject.toml
-      - name: perf regression (advisory)
-        run: uv run --locked --no-default-groups --group dev tox run -e perf >> "$GITHUB_STEP_SUMMARY"
+      - name: perf regression gate
+        env:
+          PERF_ARGS: ${{ vars.PERF_GATE_MODE == 'hard' && '--no-advisory' || '' }}
+        run: uv run --locked --no-default-groups --group dev tox run -e perf -- $PERF_ARGS >> "$GITHUB_STEP_SUMMARY"
+  # Lightweight check of the OpenTelemetry example: install the local Flask
+  # (editable) + the example's OTel deps and run the example's own pytest
+  # (which asserts spans are emitted). Not part of the main matrix; gated by
+  # smoke so it only runs once the fast gate passes.
+  observability:
+    needs: [smoke]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version-file: pyproject.toml
+      - name: install local Flask + OTel deps, run example tests
+        working-directory: examples/observability
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -e ../../ ".[observability,test]"
+          .venv/bin/pytest -v
   # Failed-test auto-attribution. Runs whether tests passed or failed
   # (if: always()), but only does work when tests failed. fetch-depth: 0 is
   # required for the git-blame fallback in scripts/triage.py.

@@ -11,20 +11,22 @@ from flask.globals import app_ctx as _app_ctx
 # gate. ``pytest_collection_modifyitems`` only *adds* the ``smoke`` marker to
 # these; a normal run (no ``-m``) selects the whole suite unchanged. The list
 # is intentionally small and tunable.
-SMOKE_MODULES = frozenset({
-    "test_basic",
-    "test_signals",
-    "test_config",
-    "test_json",
-    "test_json_tag",
-    "test_helpers",
-    "test_request",
-    "test_instance_config",
-    "test_session_interface",
-    "test_converters",
-    "test_subclassing",
-    "test_regression",
-})
+SMOKE_MODULES = frozenset(
+    {
+        "test_basic",
+        "test_signals",
+        "test_config",
+        "test_json",
+        "test_json_tag",
+        "test_helpers",
+        "test_request",
+        "test_instance_config",
+        "test_session_interface",
+        "test_converters",
+        "test_subclassing",
+        "test_regression",
+    }
+)
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
@@ -42,7 +44,6 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
         stem = module.__name__.rsplit(".", 1)[-1]
         if stem in SMOKE_MODULES:
             item.add_marker(pytest.mark.smoke)
-
 
 
 @pytest.fixture(scope="session", autouse=True)

@@ -1,9 +1,15 @@
 name: Release
 # Semver release pipeline. Manual dispatch only (never auto-fires on push).
-# Defaults to dry_run=true so a first run only prints the proposal. A real
-# release (dry_run=false) commits the version bump + CHANGELOG.md mirror,
-# tags vX.Y.Z, and pushes -- the tag triggers .github/workflows/publish.yaml,
-# whose `environment: publish` approval is the hard gate before PyPI.
+# Defaults to dry_run=true so a first run only prints the proposal.
+#
+# A real release (dry_run=false) makes TWO commits:
+#   1. "Release X.Y.Z"  -- pyproject version = X.Y.Z (clean), CHANGES.rst
+#      Unreleased->Released. Tag vX.Y.Z points at THIS commit, so `uv build`
+#      in publish.yaml produces Flask-X.Y.Z (NOT the next .dev).
+#   2. "Start X.Y.(Z+1) dev" -- pyproject version = X.Y.(Z+1).dev, new
+#      CHANGES.rst Unreleased block. Pushed to main AFTER the tag.
+# The tag push triggers .github/workflows/publish.yaml, whose
+# `environment: publish` approval is the hard gate before PyPI.
 # See docs/adr/0004-semver-release-pipeline.rst.
 on:
   workflow_dispatch:
@@ -40,21 +46,28 @@ jobs:
         with:
           python-version-file: pyproject.toml
       - id: bump
-        name: compute and (optionally) apply version bump
+        name: step 1 -- prepare tagged release commit (clean version)
         run: |
           if [ "${{ inputs.dry_run }}" = "true" ]; then
             python scripts/changes.py bump --level "${{ inputs.bump }}" --dry-run --github-output
           else
             python scripts/changes.py bump --level "${{ inputs.bump }}" --apply --github-output
           fi
-      - name: commit, tag, push (skipped on dry-run)
+      - name: commit + tag the clean-version commit
         if: ${{ inputs.dry_run != true }}
         run: |
           git config user.name "pallets-bot"
           git config user.email "contact@palletsprojects.com"
           git commit -am "Release $NEW_VERSION"
           git tag "v$NEW_VERSION"
-          git push origin "HEAD:main" "v$NEW_VERSION"
+      - name: step 2 -- reopen development on a post-tag commit
+        if: ${{ inputs.dry_run != true }}
+        run: |
+          python scripts/changes.py start-dev --next-dev "$NEXT_DEV_VERSION" --apply
+          git commit -am "Start $NEXT_DEV_VERSION dev"
+      - name: push main + tag
+        if: ${{ inputs.dry_run != true }}
+        run: git push origin "HEAD:main" "v$NEW_VERSION"
   # Attach auto-generated release notes to the GitHub release that
   # publish.yaml creates from the tag. Non-blocking; cannot break the build
   # or the PyPI publish.
