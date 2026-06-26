@@ -1,0 +1,2 @@
+Added layered CI pipeline with performance regression gate,
+failure auto-attribution, and fast lint/type-check gate.

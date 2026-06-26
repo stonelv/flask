@@ -1,0 +1,2 @@
+Added towncrier-based changelog generation and semantic release
+script (``scripts/release.sh``).

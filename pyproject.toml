@@ -322,6 +322,8 @@ dependency_groups = ["tests", "bench"]
 commands = [[
     "pytest", "benchmarks/", "-v", "--benchmark-only",
     "--benchmark-json={env_tmp_dir}/benchmark-results.json",
+    "--override-ini=python_files=bench_*.py",
+    "--override-ini=filterwarnings=default",
     {replace = "posargs", default = [], extend = true},
 ]]
 

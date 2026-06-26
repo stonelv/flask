@@ -13,6 +13,8 @@ jobs:
   tests:
     name: ${{ matrix.name || matrix.python }}
     runs-on: ${{ matrix.os || 'ubuntu-latest' }}
+    permissions:
+      pull-requests: write
     strategy:
       fail-fast: false
       matrix:
@@ -46,7 +48,30 @@ jobs:
           TOX_ENV: ${{ matrix.tox || format('py{0}', matrix.python) }}
       - name: Parse test failures
         if: steps.tests.outcome == 'failure'
-        run: python3 scripts/ci/parse_failures.py results.xml --github-actions
+        id: parse
+        run: |
+          output=$(python3 scripts/ci/parse_failures.py results.xml --github-actions 2>&1 || true)
+          echo "$output"
+          {
+            echo "summary<<EOF"
+            echo "$output"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+      - name: Comment on PR
+        if: steps.tests.outcome == 'failure' && github.event_name == 'pull_request'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const body = `### ❌ Test Failures (${{ matrix.name || matrix.python }})\n\n` +
+              `\`\`\`\n${process.env.SUMMARY}\n\`\`\``;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body
+            });
+        env:
+          SUMMARY: ${{ steps.parse.outputs.summary }}
       - name: Fail if tests failed
         if: steps.tests.outcome == 'failure'
         run: exit 1

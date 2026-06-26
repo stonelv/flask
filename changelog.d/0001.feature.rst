@@ -1,0 +1,2 @@
+Added OpenTelemetry integration as an optional extra
+(``pip install flask[otel]``). See :doc:`observability` for details.

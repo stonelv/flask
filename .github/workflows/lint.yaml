@@ -57,3 +57,24 @@ jobs:
         with:
           python-version: '3.13'
       - run: uv run --locked --no-default-groups --group dev tox run -e py3.13 -- -x --timeout=30 -q tests/test_basic.py
+
+  changelog:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Check for changelog fragment
+        run: |
+          base=${{ github.event.pull_request.base.sha }}
+          head=${{ github.event.pull_request.head.sha }}
+          fragments=$(git diff --name-only "$base" "$head" -- 'changelog.d/*.rst' | grep -v '_template' || true)
+          if [ -z "$fragments" ]; then
+            echo "::warning::No changelog fragment found in changelog.d/."
+            echo "Add a file like changelog.d/<number>.<type>.rst (type: breaking|feature|fix|docs|internal)"
+          else
+            echo "✓ Changelog fragment(s) found:"
+            echo "$fragments"
+          fi

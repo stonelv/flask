@@ -121,7 +121,7 @@ def main() -> None:
 
     if not passed:
         print(f"\n⚠️  Performance regressions detected (>{threshold}% slower)")
-        print("This is advisory — the build will not fail.")
+        sys.exit(1)
     sys.exit(0)
 
 

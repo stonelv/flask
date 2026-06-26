@@ -27,23 +27,34 @@ jobs:
         run: |
           uv run --locked --no-default-groups --group dev tox run -e bench -- \
             --benchmark-json=bench-results.json
-      - name: Download baseline
+      - name: Restore baseline from main
         if: github.event_name == 'pull_request'
         uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: baseline.json
-          key: benchmark-baseline-${{ github.base_ref }}
+          key: benchmark-baseline-main
+          restore-keys: benchmark-baseline-main
         id: baseline
       - name: Compare with baseline
+        id: compare
         if: steps.baseline.outputs.cache-hit == 'true' && github.event_name == 'pull_request'
-        run: python3 scripts/ci/compare_benchmarks.py bench-results.json baseline.json
-        continue-on-error: true  # Advisory only — does not block merge
-      - name: Store baseline
+        run: |
+          python3 scripts/ci/compare_benchmarks.py bench-results.json baseline.json --threshold=15
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+      - name: Block on regression
+        if: steps.compare.outcome == 'failure'
+        run: |
+          echo "::error::Performance regression exceeds 15% threshold — see comparison above."
+          exit 1
+      - name: Save baseline
+        if: github.ref == 'refs/heads/main'
+        run: cp bench-results.json baseline.json
+      - name: Cache baseline
         if: github.ref == 'refs/heads/main'
         uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
-          path: bench-results.json
-          key: benchmark-baseline-main-${{ github.sha }}
+          path: baseline.json
+          key: benchmark-baseline-main
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: benchmark-results
