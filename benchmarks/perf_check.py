@@ -35,8 +35,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from benchmarks.bench_core import BENCHMARKS  # noqa: E402
-
+# BENCHMARKS is imported lazily inside run_all (not at module top) so that
+# the gate *logic* can be unit-tested with stub callables without importing
+# Flask (bench_core imports Flask). Tests pass ``benchmarks=`` to run_all.
 BASELINE_PATH = Path(__file__).resolve().parent / "baseline.json"
 
 
@@ -44,18 +45,28 @@ def load_baseline() -> dict:
     return json.loads(BASELINE_PATH.read_text())
 
 
-def run_all(samples: int = 1) -> dict[str, dict[str, float]]:
+def run_all(
+    samples: int = 1, benchmarks: dict[str, object] | None = None
+) -> dict[str, dict[str, float]]:
     """Run every benchmark ``samples`` times and aggregate.
 
     With ``samples > 1`` the baseline median is the median of the per-run
     medians (robust to a single noisy run), min is the best per-run median,
     and stdev is the spread across runs. This is what ``--update-baseline
     --samples N`` writes -- a real multi-sample baseline, not one hot run.
+
+    ``benchmarks`` (a ``{name: callable}`` dict) lets tests inject stub
+    callables that return fixed stats, so the gate logic is testable without
+    importing Flask. When ``None``, the real ``benchmarks.bench_core`` registry
+    is imported.
     """
     import statistics
 
+    if benchmarks is None:
+        from benchmarks.bench_core import BENCHMARKS as benchmarks
+
     results: dict[str, dict[str, float]] = {}
-    for name, fn in BENCHMARKS.items():
+    for name, fn in benchmarks.items():
         runs = [fn() for _ in range(max(1, samples))]
         medians = [r["median_us"] for r in runs]
         results[name] = {
@@ -143,13 +154,21 @@ def main() -> int:
         help="Number of sampled runs per benchmark (use with --update-baseline "
         "for a real multi-sample baseline; median of per-run medians).",
     )
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Write the current results + per-benchmark ratios as JSON to this "
+        "path (used by the calibration workflow to upload as evidence).",
+    )
     args = parser.parse_args()
 
     if args.update_baseline:
         baseline = load_baseline()
         results = run_all(samples=args.samples)
         for name, stats in results.items():
-            baseline["benchmarks"][name].update(stats)
+            # setdefault so newly-added benchmarks are recorded, not KeyErrors.
+            baseline["benchmarks"].setdefault(name, {}).update(stats)
         BASELINE_PATH.write_text(json.dumps(baseline, indent=2) + "\n")
         print(f"Updated {BASELINE_PATH} (samples={args.samples} per benchmark)")
         return 0
@@ -158,6 +177,23 @@ def main() -> int:
     results = run_all(samples=args.samples)
     report, exit_code = build_report(baseline, results, advisory=args.advisory)
     print(report)
+    if args.out is not None:
+        payload = {
+            "samples": args.samples,
+            "advisory": args.advisory,
+            "results": results,
+            "ratios": {
+                name: (
+                    results[name]["median_us"]
+                    / baseline["benchmarks"][name]["median_us"]
+                    if baseline["benchmarks"][name].get("median_us")
+                    else None
+                )
+                for name in results
+            },
+        }
+        args.out.write_text(json.dumps(payload, indent=2) + "\n")
+        print(f"wrote {args.out}")
     return exit_code
 
 

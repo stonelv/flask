@@ -1,17 +1,17 @@
 """Minimal Flask applications used by the benchmark harness.
 
-Built once per session; imported by ``bench_core``/``bench_routing``/
-``bench_templating``. Kept deliberately small so the measurement isolates
-framework dispatch cost.
+Built once per session; imported by the bench modules. Kept deliberately
+small so the measurement isolates framework dispatch cost for each path
+(hello, jsonify, 404, session, url_for, template, routing, context).
 """
 
 from __future__ import annotations
 
-import io
-
 from flask import Flask
 from flask import jsonify
 from flask import render_template_string
+from flask import session
+from flask import url_for
 
 TEMPLATE = """\
 <!doctype html>
@@ -73,6 +73,34 @@ def make_routing_app() -> Flask:
     return app
 
 
-# A buffer the templating benchmark can render into without going through a
-# running server. Exposed so bench modules can reset it between runs if needed.
-render_buffer = io.StringIO()
+def make_session_app() -> Flask:
+    """An app that writes then reads a session key per request."""
+    app = Flask("bench_session")
+    app.secret_key = "bench"
+
+    @app.get("/sess")
+    def sess() -> str:
+        session["n"] = session.get("n", 0) + 1
+        return str(session["n"])
+
+    return app
+
+
+def make_url_for_app() -> Flask:
+    """An app with a named route so ``url_for`` can build it."""
+    app = Flask("bench_urlfor")
+
+    @app.get("/dest")
+    def dest() -> str:
+        return "dest"
+
+    @app.get("/build")
+    def build() -> str:
+        return url_for("dest")
+
+    return app
+
+
+def make_404_app() -> Flask:
+    """A bare app whose ``/nope`` hits the 404 handler path."""
+    return Flask("bench_404")

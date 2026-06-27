@@ -7,7 +7,6 @@ import inspect
 import os
 import platform
 import re
-import ssl
 import sys
 import traceback
 import typing as t

@@ -23,10 +23,13 @@ Decision
    ``pyproject.toml`` and performs string operations on ``CHANGES.rst`` --
    no parser dependency, no ``uv.lock`` regeneration, works offline.
 
-#. **``CHANGES.rst`` remains canonical and hand-maintained.** A derived
-   ``CHANGELOG.md`` (Keep-a-Changelog markdown) is regenerated from it on
-   every release via ``changes.py mirror`` and carries a do-not-edit header;
-   it cannot drift because it is never hand-edited.
+#. **``CHANGES.rst`` remains canonical and hand-maintained.** There is
+   deliberately **no committed ``CHANGELOG.md`` mirror** of the historical
+   ``CHANGES.rst`` -- regenerating the full history on every release would be
+   a large-scale rewrite of a file nobody curates, which is risk without
+   benefit. The only generated artifact is **per-version release notes**,
+   produced on demand by ``release_notes.py --version X.Y.Z`` (which extracts
+   that version's section) and attached to the GitHub release.
 
 #. **Change classification reads Conventional Commit subjects** since the last
    ``vX.Y.Z`` tag (``BREAKING``/``!`` -> major, ``feat`` -> minor,
@@ -74,10 +77,10 @@ publishing gate; a single command produces a correct version bump, changelog
 mirror, and release notes; a documented rollback procedure exists before it
 is needed.
 
-Negative: two changelog files exist (``CHANGES.rst`` canonical,
-``CHANGELOG.md`` derived). This is intentional and bounded: the derived file
-is regenerated every release, so it cannot diverge for long. A future phase
-may unify them by teaching the docs to render ``CHANGELOG.md``.
+Negative: the GitHub release body is generated per-version only; there is no
+single auto-generated full-history changelog file to browse offline (the
+hand-maintained ``CHANGES.rst`` remains that artifact, included in the docs
+as before).
 
 Alternatives considered
 -----------------------

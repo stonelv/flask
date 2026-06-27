@@ -52,3 +52,34 @@ A complete, runnable application -- the app, the telemetry wiring, a
 ``docker-compose`` stack (otel-collector, Jaeger, Prometheus, Grafana), and
 tests that assert spans are emitted -- lives in the ``examples/observability``
 directory. See its ``README.rst`` for install and run instructions.
+
+Reusing the instrumentation
+---------------------------
+
+The example's ``telemetry`` module is **reusable**, not example-specific.
+``setup_telemetry(app)`` wires all three signals into *any* Flask app via the
+seams above, depending only on Flask's public surface. To instrument your own
+application, vendor the module (or install the example project) and call it
+from your application factory::
+
+    from observability_example.telemetry import setup_telemetry
+
+    def create_app():
+        app = Flask(__name__)
+        # ... routes, config ...
+        setup_telemetry(app)  # traces + metrics + logs, OTLP or console
+        return app
+
+That single call:
+
+* wraps ``app.wsgi_app`` for automatic per-request spans and HTTP metrics;
+* subscribes to ``got_request_exception`` for error attribution;
+* records a ``flask.request.duration`` histogram and an error counter via
+  ``before_request`` / ``after_request``;
+* attaches ``trace_id`` / ``span_id`` to ``app.logger`` records.
+
+Acceptance: any Flask app that calls ``setup_telemetry(app)`` emits traces,
+metrics, and structured logs (verified by the example's tests with an
+in-memory span exporter, run in CI by the ``observability`` job). No
+``src/flask`` file is modified and no runtime dependency is added to Flask
+itself.

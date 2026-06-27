@@ -1,0 +1,37 @@
+name: Benchmarks
+# Performance calibration (not a gate). Runs the benchmark suite with many
+# samples and uploads the result JSON as evidence, plus posts the comparison
+# table to the run summary. Use this to recalibrate benchmarks/baseline.json
+# (`python benchmarks/perf_check.py --samples 20 --update-baseline`) and to
+# track perf drift over time. Runs weekly + on manual dispatch. Does not fail
+# the build (advisory); the gating perf job lives in tests.yaml.
+on:
+  schedule:
+    - cron: '7 4 * * 1' # weekly, Monday ~04:07 UTC
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: benchmarks
+  cancel-in-progress: false
+jobs:
+  calibrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          enable-cache: true
+          prune-cache: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version-file: pyproject.toml
+      - name: run benchmarks (20 samples, advisory)
+        run: uv run --locked --no-default-groups --group dev tox run -e perf -- --samples 20 --out result.json >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        if: always()
+        with:
+          name: perf-result
+          path: result.json
+          if-no-files-found: ignore

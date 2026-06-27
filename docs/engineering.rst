@@ -21,12 +21,12 @@ All additions are additive -- nothing is removed or renamed::
     .github/
       CODEOWNERS                         # reviewer auto-assign + triage input
       workflows/
-        tests.yaml                       # EDITED: smoke/perf/triage layering
-        release.yaml                     # NEW: semver release (workflow_dispatch)
+        tests.yaml                       # EDITED: smoke/perf/observability/triage layering
+        release.yaml                     # NEW: semver release (workflow_dispatch, two-phase)
+        benchmarks.yaml                  # NEW: weekly perf calibration (multi-sample, uploads result)
         (publish/pre-commit/lock/zizmor.yaml unchanged)
-    benchmarks/                          # NEW: stdlib in-process perf gate
-      __init__.py, conftest.py
-      bench_core.py, bench_routing.py, bench_templating.py
+    benchmarks/                          # NEW: stdlib in-process perf gate (8 benchmarks)
+      __init__.py, conftest.py, bench_core.py
       baseline.json, perf_check.py, README.rst
     docs/
       engineering.rst                    # NEW: this page
@@ -38,21 +38,27 @@ All additions are additive -- nothing is removed or renamed::
     scripts/                             # NEW: stdlib tooling
       changes.py, release_notes.py, triage.py, rollback.py, bootstrap.sh
     tests/conftest.py                    # EDITED: marker registration + smoke allowlist
+    tests/test_platform.py               # NEW: dry-run tests for scripts (no Flask)
     Makefile                             # NEW: thin task runner
-    CHANGELOG.md                         # NEW: derived mirror, generated on release
     pyproject.toml                       # EDITED: markers, tox envs, ruff.src, sdist.include
 
 Unchanged (no public API behavior change): ``tests/test_*.py``,
 ``CHANGES.rst`` (format), ``uv.lock`` (proven in sync by the ``uv-lock``
 pre-commit hook), the existing examples, ``publish.yaml``, ``docs/Makefile``.
 
-One necessary ``src/flask`` fix: ``src/flask/cli.py`` hoists ``import ssl``
-to runtime (it was under ``if TYPE_CHECKING``, but the base-class subscript
-``click.ParamType[... ssl.SSLContext]`` at line 780 evaluates ``ssl`` at
-runtime). With the locked ``click==8.4.0`` this made ``import flask`` fail
-with ``NameError``. The fix changes no public API behavior (only makes
-``import flask`` succeed); it was required to run the smoke/perf/typing gates
-at all. ``mypy --strict`` and the full suite (491 tests) pass with it.
+No ``src/flask/**`` changes (byte-identical to upstream). One **upstream
+finding**, not part of this platform: this snapshot's ``src/flask/cli.py``
+imports ``ssl`` only under ``if t.TYPE_CHECKING:``, but the base-class
+subscript ``click.ParamType[... ssl.SSLContext]`` (line 780) evaluates
+``ssl`` at runtime (base-class subscripts are not deferred by
+``from __future__ import annotations``). With the locked ``click==8.4.0``
+this makes ``import flask`` raise ``NameError``. The fix (hoist
+``import ssl`` to runtime) belongs **upstream**, not in this platform; the
+platform's smoke gate correctly surfaces it. Flask-dependent gates
+(smoke/perf actual benchmarks/OTel/typing) therefore require that upstream
+fix to run; the platform's own logic (release/rollback/triage/perf-gate
+comparison) is covered by ``tests/test_platform.py``, which does not import
+Flask and runs under ``pytest --noconftest tests/test_platform.py``.
 
 
 Risk list
@@ -103,9 +109,12 @@ Risk list
    ``perf`` are defined but **not** added to ``env_list``; CI invokes them
    with ``-e``.
 
-#. **``CHANGELOG.md`` drift from ``CHANGES.rst``** -- mitigated:
-   ``CHANGELOG.md`` is regenerated from ``CHANGES.rst`` on every release
-   (idempotent ``mirror`` command) and is never hand-edited.
+#. **No committed ``CHANGELOG.md`` mirror** -- by design: regenerating the
+   full historical ``CHANGES.rst`` into a second file on every release would
+   be a large-scale, uncurated rewrite (risk without benefit). Only
+   per-version release notes are generated, on demand, by
+   ``release_notes.py``; ``CHANGES.rst`` stays the single canonical
+   changelog (hand-maintained, included in the docs as before).
 
 
 Acceptance criteria
@@ -115,17 +124,25 @@ Acceptance criteria
 * ``tox run -e docs`` passes under ``-W`` (ADRs, the observability page, and
   this page render with no dangling references).
 * ``tox run -e smoke`` runs the curated subset and exits 0 on a clean tree.
-* ``tox run -e perf`` runs all three benchmarks, compares against
+* ``tox run -e perf`` runs all eight benchmarks, compares against
   ``baseline.json``, exits 0 in advisory mode, and posts a table.
+* ``pytest --noconftest tests/test_platform.py`` passes (32 dry-run tests for
+  the release two-phase, rollback runbook, perf-gate logic with stub
+  benchmarks, and triage mapping -- no Flask import required).
+* ``.github/workflows/benchmarks.yaml`` (weekly + manual) runs
+  ``perf_check --samples 20 --out result.json`` and uploads ``perf-result``
+  as calibration evidence; the committed ``baseline.json`` is a real 10-sample
+  median (8 benchmarks).
 * ``python scripts/triage.py --junit <dir>`` against a synthetic failed JUnit
   produces the attribution table with the correct source-module mapping for
   all nine exception stems and the default rule.
 * ``python scripts/changes.py bump --level patch --dry-run`` prints the
-  proposed version, the ``CHANGES.rst`` head diff, and a ``CHANGELOG.md``
-  preview without writing.
+  proposed version and the ``CHANGES.rst`` head diff without writing (and
+  writes no ``CHANGELOG.md``).
 * ``examples/observability/``'s own ``pytest`` passes (spans/metrics asserted
   via the in-memory exporter); the console-exporter path runs without a
-  collector.
+  collector. ``setup_telemetry(app)`` instruments any Flask app (reusable
+  module, not example-only).
 * ``uv.lock`` is byte-identical to the pre-platform lock (proof of zero
   churn); ``src/flask/**`` is byte-identical to the pre-platform tree.
 * ``./scripts/bootstrap.sh check`` completes green on a fresh clone.
@@ -158,11 +175,11 @@ a broken PR is skip-cancelled at smoke.
 perf gate hard-fails a synthetic regression.
 
 **Phase 4 -- Release pipeline (manual, dry-run).** Add
-``.github/workflows/release.yaml`` (default ``dry_run: true``); add
-``CHANGELOG.md`` via ``changes.py mirror``; run a dry-run release on ``main``
-and verify the ``CHANGES.rst`` rename, ``pyproject.toml`` bump,
-``CHANGELOG.md`` mirror, and release notes. Gate: no tag pushed, no PyPI
-interaction.
+``.github/workflows/release.yaml`` (default ``dry_run: true``); run a
+dry-run release on ``main`` and verify the ``CHANGES.rst`` rename,
+``pyproject.toml`` clean-version bump (tag points at the clean commit), and
+per-version release notes (no ``CHANGELOG.md`` mirror). Gate: no tag pushed,
+no PyPI interaction.
 
 **Phase 5 -- Release pipeline (live, gated).** Run ``release.yaml`` with
 ``dry_run: false`` for a real patch release: tag push -> ``publish.yaml``
